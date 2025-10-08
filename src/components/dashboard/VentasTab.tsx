@@ -25,10 +25,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus } from "lucide-react";
+import { Plus, Search, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { formatCurrency } from "@/lib/currency";
 
 interface Venta {
   id_venta: string;
@@ -51,6 +52,8 @@ const VentasTab = () => {
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [open, setOpen] = useState(false);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filtroFecha, setFiltroFecha] = useState<"hoy" | "semana" | "mes" | "todas">("todas");
   const [formData, setFormData] = useState({
     id_cliente: "sin_cliente",
     total: "",
@@ -142,12 +145,44 @@ const VentasTab = () => {
     mercadopago: "MercadoPago",
   };
 
+  // Filtrar ventas
+  const ventasFiltradas = ventas.filter((venta) => {
+    // Filtro por texto (cliente o monto)
+    const coincideTexto = 
+      searchTerm === "" ||
+      venta.clientes?.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      venta.clientes?.apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      venta.total.toString().includes(searchTerm);
+
+    // Filtro por fecha
+    const fechaVenta = new Date(venta.fecha);
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    
+    let coincideFecha = true;
+    if (filtroFecha === "hoy") {
+      coincideFecha = fechaVenta >= hoy;
+    } else if (filtroFecha === "semana") {
+      const semanaAtras = new Date(hoy);
+      semanaAtras.setDate(semanaAtras.getDate() - 7);
+      coincideFecha = fechaVenta >= semanaAtras;
+    } else if (filtroFecha === "mes") {
+      const mesAtras = new Date(hoy);
+      mesAtras.setMonth(mesAtras.getMonth() - 1);
+      coincideFecha = fechaVenta >= mesAtras;
+    }
+
+    return coincideTexto && coincideFecha;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Historial de Ventas</h3>
-          <p className="text-sm text-muted-foreground">Últimas 50 ventas registradas</p>
+          <p className="text-sm text-muted-foreground">
+            {ventasFiltradas.length} venta(s) {filtroFecha !== "todas" && `(${filtroFecha})`}
+          </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -234,6 +269,31 @@ const VentasTab = () => {
         </Dialog>
       </div>
 
+      {/* Filtros de búsqueda */}
+      <div className="flex gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por cliente o monto..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={filtroFecha} onValueChange={(value: any) => setFiltroFecha(value)}>
+          <SelectTrigger className="w-40">
+            <Filter className="mr-2 h-4 w-4" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas</SelectItem>
+            <SelectItem value="hoy">Hoy</SelectItem>
+            <SelectItem value="semana">Última semana</SelectItem>
+            <SelectItem value="mes">Último mes</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="border rounded-lg">
         <Table>
           <TableHeader>
@@ -245,14 +305,14 @@ const VentasTab = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {ventas.length === 0 ? (
+            {ventasFiltradas.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground">
-                  No hay ventas registradas
+                  {ventas.length === 0 ? "No hay ventas registradas" : "No se encontraron ventas con esos filtros"}
                 </TableCell>
               </TableRow>
             ) : (
-              ventas.map((venta) => (
+              ventasFiltradas.map((venta) => (
                 <TableRow key={venta.id_venta}>
                   <TableCell>
                     {format(new Date(venta.fecha), "dd/MM/yyyy HH:mm", {
@@ -265,7 +325,7 @@ const VentasTab = () => {
                       : "Sin cliente"}
                   </TableCell>
                   <TableCell className="font-medium">
-                    ${venta.total.toFixed(2)}
+                    {formatCurrency(venta.total)}
                   </TableCell>
                   <TableCell>{metodoPagoLabels[venta.metodo_pago]}</TableCell>
                 </TableRow>

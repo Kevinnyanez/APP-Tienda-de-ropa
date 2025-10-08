@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { Users, Package, DollarSign, TrendingUp } from "lucide-react";
+import { formatCurrency } from "@/lib/currency";
 
 const StatsCards = () => {
   const [stats, setStats] = useState({
@@ -66,7 +67,7 @@ const StatsCards = () => {
             <TrendingUp className="h-6 w-6 text-green-600" />
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold text-green-600">${stats.entradasHoy.toFixed(2)}</div>
+            <div className="text-3xl font-bold text-green-600">{formatCurrency(stats.entradasHoy)}</div>
             <p className="text-sm text-muted-foreground mt-1">Ingresos del día</p>
           </CardContent>
         </Card>
@@ -79,7 +80,7 @@ const StatsCards = () => {
             <DollarSign className="h-6 w-6 text-red-600" />
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold text-red-600">${stats.salidasHoy.toFixed(2)}</div>
+            <div className="text-3xl font-bold text-red-600">{formatCurrency(stats.salidasHoy)}</div>
             <p className="text-sm text-muted-foreground mt-1">Gastos del día</p>
           </CardContent>
         </Card>
@@ -109,7 +110,7 @@ const StatsCards = () => {
             <div className={`text-3xl font-bold ${
               stats.saldoHoy >= 0 ? 'text-blue-600' : 'text-orange-600'
             }`}>
-              ${stats.saldoHoy.toFixed(2)}
+              {formatCurrency(stats.saldoHoy)}
             </div>
             <p className="text-sm text-muted-foreground mt-1">Balance diario</p>
           </CardContent>
@@ -124,7 +125,7 @@ const StatsCards = () => {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold">${stats.ventasHoy.toFixed(2)}</div>
+            <div className="text-xl font-bold">{formatCurrency(stats.ventasHoy)}</div>
             <p className="text-xs text-muted-foreground">Total vendido</p>
           </CardContent>
         </Card>

@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import { formatCurrency } from "@/lib/currency";
 
 interface Articulo {
   id_articulo: string;
@@ -428,7 +429,7 @@ const ArticulosTab = () => {
                       "-"
                     )}
                   </TableCell>
-                  <TableCell>${art.precio_venta.toFixed(2)}</TableCell>
+                  <TableCell>{formatCurrency(art.precio_venta)}</TableCell>
                   <TableCell>
                     <Badge variant={art.stock_disponible > 0 ? "default" : "destructive"}>
                       {art.stock_disponible}

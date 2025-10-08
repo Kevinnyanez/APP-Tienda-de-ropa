@@ -27,10 +27,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ArrowDownCircle, ArrowUpCircle, ShoppingCart, ShoppingBag, Wallet } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
+import { formatCurrency } from "@/lib/currency";
 
 interface Movimiento {
   id_movimiento: string;
@@ -75,8 +89,20 @@ const CajaTab = () => {
     concepto: "",
   });
 
+  // Estados para venta con artículos
+  const [articulos, setArticulos] = useState<any[]>([]);
+  const [clientes, setClientes] = useState<any[]>([]);
+  const [articulosVenta, setArticulosVenta] = useState<Array<{ id_articulo: string; cantidad: number; precio: number }>>([]);
+  const [articuloSeleccionado, setArticuloSeleccionado] = useState("");
+  const [cantidadArticulo, setCantidadArticulo] = useState("1");
+  const [clienteSeleccionado, setClienteSeleccionado] = useState("sin_cliente");
+  const [metodoPagoVenta, setMetodoPagoVenta] = useState("");
+  const [openArticuloPopover, setOpenArticuloPopover] = useState(false);
+
   useEffect(() => {
     fetchMovimientos();
+    fetchArticulos();
+    fetchClientes();
   }, []);
 
   useEffect(() => {
@@ -167,6 +193,31 @@ const CajaTab = () => {
     }
   };
 
+  const fetchArticulos = async () => {
+    const { data, error } = await supabase
+      .from("articulos")
+      .select("*")
+      .eq("activo", true)
+      .gt("stock_disponible", 0)
+      .order("nombre");
+
+    if (!error && data) {
+      setArticulos(data);
+    }
+  };
+
+  const fetchClientes = async () => {
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("id_cliente, nombre, apellido")
+      .eq("activo", true)
+      .order("nombre");
+
+    if (!error && data) {
+      setClientes(data);
+    }
+  };
+
   const metodoPagoLabels: Record<string, string> = {
     efectivo: "Efectivo",
     tarjeta_debito: "Tarjeta Débito",
@@ -175,6 +226,115 @@ const CajaTab = () => {
     mercadopago: "MercadoPago",
     cuenta_corriente: "Cuenta Corriente",
     sin_especificar: "Sin especificar",
+  };
+
+  const agregarArticuloVenta = () => {
+    if (!articuloSeleccionado) {
+      toast.error("Selecciona un artículo");
+      return;
+    }
+
+    const articulo = articulos.find(a => a.id_articulo === articuloSeleccionado);
+    if (!articulo) return;
+
+    const cantidad = parseInt(cantidadArticulo);
+    if (cantidad <= 0 || cantidad > articulo.stock_disponible) {
+      toast.error(`Stock disponible: ${articulo.stock_disponible}`);
+      return;
+    }
+
+    setArticulosVenta([...articulosVenta, {
+      id_articulo: articulo.id_articulo,
+      cantidad,
+      precio: articulo.precio_venta,
+    }]);
+
+    setArticuloSeleccionado("");
+    setCantidadArticulo("1");
+    toast.success(`${articulo.nombre} agregado`);
+  };
+
+  const eliminarArticuloVenta = (index: number) => {
+    setArticulosVenta(articulosVenta.filter((_, i) => i !== index));
+  };
+
+  const calcularTotalVenta = () => {
+    return articulosVenta.reduce((total, item) => total + (item.cantidad * item.precio), 0);
+  };
+
+  const registrarVentaConArticulos = async () => {
+    if (articulosVenta.length === 0) {
+      toast.error("Agrega al menos un artículo");
+      return;
+    }
+
+    if (!metodoPagoVenta) {
+      toast.error("Selecciona un método de pago");
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const total = calcularTotalVenta();
+
+    // Crear la venta
+    const { data: venta, error: ventaError } = await supabase
+      .from("ventas")
+      .insert({
+        id_cliente: clienteSeleccionado === "sin_cliente" ? null : clienteSeleccionado,
+        total,
+        estado: "pago",
+        metodo_pago: metodoPagoVenta,
+        user_id: user.id,
+      })
+      .select()
+      .single();
+
+    if (ventaError || !venta) {
+      toast.error("Error al crear la venta");
+      return;
+    }
+
+    // Crear los detalles de venta
+    const detalles = articulosVenta.map(item => ({
+      id_venta: venta.id_venta,
+      id_articulo: item.id_articulo,
+      cantidad: item.cantidad,
+      precio_unitario: item.precio,
+      estado_articulo: "pago",
+      user_id: user.id,
+    }));
+
+    const { error: detallesError } = await supabase
+      .from("detalle_venta")
+      .insert(detalles);
+
+    if (detallesError) {
+      toast.error("Error al registrar los artículos");
+      return;
+    }
+
+    // Registrar en caja
+    await supabase.from("movimientos_caja").insert({
+      tipo: "entrada",
+      monto: total,
+      medio_pago: metodoPagoVenta,
+      descripcion: `Venta - ${articulosVenta.length} artículo(s)`,
+      id_venta: venta.id_venta,
+      user_id: user.id,
+    });
+
+    toast.success("Venta registrada exitosamente");
+    
+    // Resetear formulario
+    setArticulosVenta([]);
+    setClienteSeleccionado("sin_cliente");
+    setMetodoPagoVenta("");
+    setDialogVenta(false);
+    
+    fetchMovimientos();
+    fetchArticulos();
   };
 
   const registrarMovimiento = async (tipo: "entrada" | "salida", conceptoBase: string) => {
@@ -189,8 +349,8 @@ const CajaTab = () => {
     const { error } = await supabase.from("movimientos_caja" as any).insert({
       tipo,
       monto: parseFloat(formMovimiento.monto),
-      metodo_pago: formMovimiento.metodo_pago || null,
-      concepto: formMovimiento.concepto || conceptoBase,
+      medio_pago: formMovimiento.metodo_pago || null,
+      descripcion: formMovimiento.concepto || conceptoBase,
       user_id: user.id,
     } as any);
 
@@ -244,7 +404,7 @@ const CajaTab = () => {
 
       {/* Diálogos de Movimientos */}
       <Dialog open={dialogVenta} onOpenChange={setDialogVenta}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
               <ShoppingCart className="h-6 w-6 text-green-600" />
@@ -252,50 +412,147 @@ const CajaTab = () => {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Cliente (opcional) */}
             <div>
-              <Label htmlFor="monto-venta" className="text-base">Monto *</Label>
-              <Input
-                id="monto-venta"
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={formMovimiento.monto}
-                onChange={(e) => setFormMovimiento({ ...formMovimiento, monto: e.target.value })}
-                className="text-2xl h-14 text-center"
-              />
+              <Label className="text-base">Cliente (opcional)</Label>
+              <Select value={clienteSeleccionado} onValueChange={setClienteSeleccionado}>
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Cliente general" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sin_cliente">Cliente general</SelectItem>
+                  {clientes.map((cliente) => (
+                    <SelectItem key={cliente.id_cliente} value={cliente.id_cliente}>
+                      {cliente.nombre} {cliente.apellido}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Seleccionar Artículos */}
+            <div className="border rounded-lg p-4 bg-muted/30">
+              <Label className="text-base font-semibold mb-3 block">Agregar Artículos</Label>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="col-span-2">
+                  <Popover open={openArticuloPopover} onOpenChange={setOpenArticuloPopover}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between h-10"
+                      >
+                        {articuloSeleccionado
+                          ? articulos.find((art) => art.id_articulo === articuloSeleccionado)?.nombre
+                          : "Buscar artículo..."}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[500px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Buscar por código o nombre..." />
+                        <CommandList>
+                          <CommandEmpty>No se encontraron artículos.</CommandEmpty>
+                          <CommandGroup>
+                            {articulos.map((art) => (
+                              <CommandItem
+                                key={art.id_articulo}
+                                value={`${art.codigo} ${art.nombre}`}
+                                onSelect={() => {
+                                  setArticuloSeleccionado(art.id_articulo);
+                                  setOpenArticuloPopover(false);
+                                }}
+                              >
+                                <div className="flex justify-between w-full">
+                                  <span>
+                                    {art.codigo} - {art.nombre}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    ${art.precio_venta} | Stock: {art.stock_disponible}
+                                  </span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <Input
+                  type="number"
+                  min="1"
+                  value={cantidadArticulo}
+                  onChange={(e) => setCantidadArticulo(e.target.value)}
+                  placeholder="Cant."
+                />
+              </div>
+              <Button
+                onClick={agregarArticuloVenta}
+                variant="outline"
+                className="w-full"
+              >
+                + Agregar al carrito
+              </Button>
+            </div>
+
+            {/* Lista de artículos agregados */}
+            {articulosVenta.length > 0 && (
+              <div className="border rounded-lg p-4">
+                <Label className="text-base font-semibold mb-3 block">Artículos en la venta</Label>
+                <div className="space-y-2">
+                  {articulosVenta.map((item, index) => {
+                    const art = articulos.find(a => a.id_articulo === item.id_articulo);
+                    return (
+                      <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
+                        <span className="flex-1">
+                          {art?.codigo} - {art?.nombre} x {item.cantidad}
+                        </span>
+                        <span className="font-bold mx-4">
+                          {formatCurrency(item.cantidad * item.precio)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => eliminarArticuloVenta(index)}
+                          className="text-red-600"
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex justify-between items-center text-2xl font-bold">
+                    <span>TOTAL:</span>
+                    <span>{formatCurrency(calcularTotalVenta())}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Método de Pago */}
             <div>
               <Label className="text-base">Método de Pago *</Label>
-              <Select
-                value={formMovimiento.metodo_pago}
-                onValueChange={(value) => setFormMovimiento({ ...formMovimiento, metodo_pago: value })}
-              >
+              <Select value={metodoPagoVenta} onValueChange={setMetodoPagoVenta}>
                 <SelectTrigger className="h-12">
                   <SelectValue placeholder="Seleccionar método" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="efectivo">Efectivo</SelectItem>
-                  <SelectItem value="tarjeta_debito">Tarjeta Débito</SelectItem>
-                  <SelectItem value="tarjeta_credito">Tarjeta Crédito</SelectItem>
-                  <SelectItem value="transferencia">Transferencia</SelectItem>
-                  <SelectItem value="mercadopago">MercadoPago</SelectItem>
+                  <SelectItem value="efectivo">💵 Efectivo</SelectItem>
+                  <SelectItem value="tarjeta_debito">💳 Tarjeta Débito</SelectItem>
+                  <SelectItem value="tarjeta_credito">💳 Tarjeta Crédito</SelectItem>
+                  <SelectItem value="transferencia">🏦 Transferencia</SelectItem>
+                  <SelectItem value="mercadopago">📱 MercadoPago</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="text-base">Concepto/Descripción</Label>
-              <Textarea
-                placeholder="Detalles de la venta..."
-                value={formMovimiento.concepto}
-                onChange={(e) => setFormMovimiento({ ...formMovimiento, concepto: e.target.value })}
-                className="min-h-20"
-              />
-            </div>
+
             <Button
-              onClick={() => registrarMovimiento("entrada", "Venta")}
-              className="w-full h-12 text-lg bg-green-600 hover:bg-green-700"
+              onClick={registrarVentaConArticulos}
+              className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
             >
-              Confirmar Venta
+              Confirmar Venta - {formatCurrency(calcularTotalVenta())}
             </Button>
           </div>
         </DialogContent>
@@ -407,7 +664,7 @@ const CajaTab = () => {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600">
-              ${totales.entradas.toFixed(2)}
+              {formatCurrency(totales.entradas)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Total histórico</p>
           </CardContent>
@@ -420,7 +677,7 @@ const CajaTab = () => {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-red-600">
-              ${totales.salidas.toFixed(2)}
+              {formatCurrency(totales.salidas)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Total histórico</p>
           </CardContent>
@@ -436,7 +693,7 @@ const CajaTab = () => {
                 totales.saldo >= 0 ? "text-green-600" : "text-red-600"
               }`}
             >
-              ${totales.saldo.toFixed(2)}
+              {formatCurrency(totales.saldo)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Balance general</p>
           </CardContent>
@@ -480,7 +737,7 @@ const CajaTab = () => {
                 Entradas
               </p>
               <p className="text-2xl font-bold text-green-700 dark:text-green-400">
-                ${statsPeriodo.entradas.toFixed(2)}
+                {formatCurrency(statsPeriodo.entradas)}
               </p>
             </div>
             <div className="p-4 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900">
@@ -488,7 +745,7 @@ const CajaTab = () => {
                 Salidas
               </p>
               <p className="text-2xl font-bold text-red-700 dark:text-red-400">
-                ${statsPeriodo.salidas.toFixed(2)}
+                {formatCurrency(statsPeriodo.salidas)}
               </p>
             </div>
             <div
@@ -514,7 +771,7 @@ const CajaTab = () => {
                     : "text-orange-700 dark:text-orange-400"
                 }`}
               >
-                ${statsPeriodo.saldo.toFixed(2)}
+                {formatCurrency(statsPeriodo.saldo)}
               </p>
             </div>
           </div>
@@ -531,7 +788,7 @@ const CajaTab = () => {
                   <p className="text-xs text-muted-foreground">
                     {metodoPagoLabels[stat.metodo] || stat.metodo}
                   </p>
-                  <p className="text-lg font-bold">${stat.total.toFixed(2)}</p>
+                  <p className="text-lg font-bold">{formatCurrency(stat.total)}</p>
                 </div>
               ))}
             </div>
@@ -605,8 +862,7 @@ const CajaTab = () => {
                           mov.tipo === "entrada" ? "text-green-600" : "text-red-600"
                         }`}
                       >
-                        {mov.tipo === "entrada" ? "+" : "-"}$
-                        {mov.monto.toFixed(2)}
+                        {mov.tipo === "entrada" ? "+" : "-"} {formatCurrency(mov.monto)}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm">

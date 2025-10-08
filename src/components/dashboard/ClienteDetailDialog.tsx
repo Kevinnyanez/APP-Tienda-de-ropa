@@ -18,6 +18,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Table,
   TableBody,
   TableCell,
@@ -30,6 +43,7 @@ import { Plus, Trash2, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-r
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { formatCurrency } from "@/lib/currency";
 
 interface ClienteDetailDialogProps {
   clienteId: string | null;
@@ -57,8 +71,6 @@ interface DetalleVenta {
   articulos: {
     codigo: string;
     nombre: string;
-    talle: string | null;
-    color: string | null;
   } | null;
 }
 
@@ -66,8 +78,6 @@ interface Articulo {
   id_articulo: string;
   codigo: string;
   nombre: string;
-  talle: string | null;
-  color: string | null;
   precio_venta: number;
   stock_disponible: number;
 }
@@ -92,6 +102,12 @@ const ClienteDetailDialog = ({
     pagado: 0,
   });
 
+  // Estado para el diálogo de método de pago
+  const [showMetodoPagoDialog, setShowMetodoPagoDialog] = useState(false);
+  const [ventaPendientePago, setVentaPendientePago] = useState<string | null>(null);
+  const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState("");
+  const [openArticuloPopover, setOpenArticuloPopover] = useState(false);
+
   useEffect(() => {
     if (open && clienteId) {
       fetchVentas();
@@ -108,7 +124,7 @@ const ClienteDetailDialog = ({
         *,
         detalle_venta (
           *,
-          articulos (codigo, nombre, talle, color)
+          articulos (codigo, nombre)
         )
       `)
       .eq("id_cliente", clienteId)
@@ -117,6 +133,9 @@ const ClienteDetailDialog = ({
     if (!error && data) {
       setVentas(data as any);
       calcularTotales(data as any);
+    } else if (error) {
+      console.error("Error al cargar ventas:", error);
+      toast.error("No se pudieron cargar las ventas");
     }
   };
 
@@ -205,19 +224,22 @@ const ClienteDetailDialog = ({
       return;
     }
 
-    // Si es pago inmediato, registrar en caja
+    // Si es pago inmediato, pedir método de pago y registrar en caja
     if (estadoInicial === "pago") {
+      // Aquí deberíamos pedir el método de pago, pero para simplificar,
+      // lo registramos como efectivo por defecto
       await supabase.from("movimientos_caja").insert({
         tipo: "entrada",
         monto: totalVenta,
-        metodo_pago: "efectivo",
-        concepto: `Venta a ${clienteNombre}`,
+        medio_pago: "efectivo",
+        descripcion: `Venta a ${clienteNombre}`,
         id_venta: venta.id_venta,
         user_id: user.id,
       });
+      toast.success("Prenda agregada y pagada - Registrado en caja");
+    } else {
+      toast.success("Prenda agregada exitosamente");
     }
-
-    toast.success("Prenda agregada exitosamente");
     setShowAddForm(false);
     setSelectedArticulo("sin_articulo");
     setCantidad("1");
@@ -232,13 +254,35 @@ const ClienteDetailDialog = ({
     if (!venta) return;
 
     const estadoAnterior = venta.estado;
+
+    // Si cambia a pago, pedir método de pago primero
+    if (nuevoEstado === "pago" && estadoAnterior !== "pago") {
+      setVentaPendientePago(ventaId);
+      setShowMetodoPagoDialog(true);
+      return;
+    }
+
+    // Para otros cambios de estado, proceder normalmente
+    await actualizarEstadoVenta(ventaId, nuevoEstado, null);
+  };
+
+  const actualizarEstadoVenta = async (ventaId: string, nuevoEstado: string, metodoPago: string | null) => {
+    const venta = ventas.find((v) => v.id_venta === ventaId);
+    if (!venta) return;
+
+    const estadoAnterior = venta.estado;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
     // Actualizar el estado de la venta
+    const updateData: any = { estado: nuevoEstado };
+    if (metodoPago) {
+      updateData.metodo_pago = metodoPago;
+    }
+
     const { error: ventaError } = await supabase
       .from("ventas")
-      .update({ estado: nuevoEstado })
+      .update(updateData)
       .eq("id_venta", ventaId);
 
     if (ventaError) {
@@ -262,8 +306,8 @@ const ClienteDetailDialog = ({
       await supabase.from("movimientos_caja").insert({
         tipo: "entrada",
         monto: venta.total,
-        metodo_pago: "efectivo",
-        concepto: `Pago de ${clienteNombre}`,
+        medio_pago: metodoPago || "efectivo",
+        descripcion: `Pago de ${clienteNombre}`,
         id_venta: ventaId,
         user_id: user.id,
       });
@@ -277,6 +321,21 @@ const ClienteDetailDialog = ({
     fetchVentas();
     fetchArticulos();
     onUpdate();
+  };
+
+  const confirmarPagoConMetodo = async () => {
+    if (!metodoPagoSeleccionado) {
+      toast.error("Selecciona un método de pago");
+      return;
+    }
+
+    if (!ventaPendientePago) return;
+
+    await actualizarEstadoVenta(ventaPendientePago, "pago", metodoPagoSeleccionado);
+    
+    setShowMetodoPagoDialog(false);
+    setVentaPendientePago(null);
+    setMetodoPagoSeleccionado("");
   };
 
   const handleDeleteVenta = async (ventaId: string) => {
@@ -353,7 +412,7 @@ const ClienteDetailDialog = ({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-yellow-600">
-                  ${totales.pendiente.toFixed(2)}
+                  {formatCurrency(totales.pendiente)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">En prueba</p>
               </CardContent>
@@ -368,7 +427,7 @@ const ClienteDetailDialog = ({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600">
-                  ${totales.deuda.toFixed(2)}
+                  {formatCurrency(totales.deuda)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Pendiente de pago</p>
               </CardContent>
@@ -383,7 +442,7 @@ const ClienteDetailDialog = ({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  ${totales.pagado.toFixed(2)}
+                  {formatCurrency(totales.pagado)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Total histórico</p>
               </CardContent>
@@ -405,22 +464,48 @@ const ClienteDetailDialog = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-base">Artículo *</Label>
-                    <Select value={selectedArticulo} onValueChange={setSelectedArticulo}>
-                      <SelectTrigger className="h-12">
-                        <SelectValue placeholder="Seleccionar artículo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sin_articulo">Seleccionar...</SelectItem>
-                        {articulos.map((art) => (
-                          <SelectItem key={art.id_articulo} value={art.id_articulo}>
-                            {art.codigo} - {art.nombre} 
-                            {art.talle && ` (${art.talle})`}
-                            {art.color && ` - ${art.color}`}
-                            {` - $${art.precio_venta.toFixed(2)} - Stock: ${art.stock_disponible}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={openArticuloPopover} onOpenChange={setOpenArticuloPopover}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between h-12"
+                        >
+                          {selectedArticulo !== "sin_articulo"
+                            ? articulos.find((art) => art.id_articulo === selectedArticulo)?.nombre
+                            : "Buscar artículo..."}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[500px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar por código o nombre..." />
+                          <CommandList>
+                            <CommandEmpty>No se encontraron artículos.</CommandEmpty>
+                            <CommandGroup>
+                              {articulos.map((art) => (
+                                <CommandItem
+                                  key={art.id_articulo}
+                                  value={`${art.codigo} ${art.nombre}`}
+                                  onSelect={() => {
+                                    setSelectedArticulo(art.id_articulo);
+                                    setOpenArticuloPopover(false);
+                                  }}
+                                >
+                                  <div className="flex justify-between w-full">
+                                    <span>
+                                      {art.codigo} - {art.nombre}
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                      {formatCurrency(art.precio_venta)} | Stock: {art.stock_disponible}
+                                    </span>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-base">Cantidad *</Label>
@@ -499,14 +584,12 @@ const ClienteDetailDialog = ({
                           <TableCell>
                             {venta.detalle_venta.map((detalle, idx) => (
                               <div key={idx} className="text-sm">
-                                {detalle.cantidad}x {detalle.articulos?.nombre}
-                                {detalle.articulos?.talle && ` (${detalle.articulos.talle})`}
-                                {detalle.articulos?.color && ` - ${detalle.articulos.color}`}
+                                {detalle.cantidad}x {detalle.articulos?.nombre || "Artículo"}
                               </div>
                             ))}
                           </TableCell>
                           <TableCell className="font-bold text-lg">
-                            ${venta.total.toFixed(2)}
+                            {formatCurrency(venta.total)}
                           </TableCell>
                           <TableCell>
                             <Select
@@ -544,6 +627,51 @@ const ClienteDetailDialog = ({
           </Card>
         </div>
       </DialogContent>
+
+      {/* Diálogo para seleccionar método de pago */}
+      <Dialog open={showMetodoPagoDialog} onOpenChange={setShowMetodoPagoDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Seleccionar Método de Pago</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              ¿Cómo pagó el cliente?
+            </p>
+            <Select value={metodoPagoSeleccionado} onValueChange={setMetodoPagoSeleccionado}>
+              <SelectTrigger className="h-12">
+                <SelectValue placeholder="Selecciona método de pago" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="efectivo">💵 Efectivo</SelectItem>
+                <SelectItem value="tarjeta_debito">💳 Tarjeta Débito</SelectItem>
+                <SelectItem value="tarjeta_credito">💳 Tarjeta Crédito</SelectItem>
+                <SelectItem value="transferencia">🏦 Transferencia</SelectItem>
+                <SelectItem value="mercadopago">📱 MercadoPago</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex gap-2 pt-4">
+              <Button
+                onClick={confirmarPagoConMetodo}
+                className="flex-1 h-12 bg-green-600 hover:bg-green-700"
+              >
+                Confirmar Pago
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowMetodoPagoDialog(false);
+                  setVentaPendientePago(null);
+                  setMetodoPagoSeleccionado("");
+                }}
+                className="flex-1 h-12"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };

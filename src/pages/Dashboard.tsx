@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogOut, Users, Package, ShoppingCart, Wallet, TrendingUp, DollarSign } from "lucide-react";
+import { LogOut, Users, Package, TrendingUp, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import type { Session } from "@supabase/supabase-js";
 import ClientesTab from "@/components/dashboard/ClientesTab";
@@ -12,7 +12,6 @@ import ArticulosTab from "@/components/dashboard/ArticulosTab";
 import VentasTab from "@/components/dashboard/VentasTab";
 import CajaTab from "@/components/dashboard/CajaTab";
 import StatsCards from "@/components/dashboard/StatsCards";
-import PuntoVentaTab from "@/components/dashboard/PuntoVentaTab";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -96,15 +95,11 @@ const Dashboard = () => {
             </p>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="punto-venta" className="w-full">
-              <TabsList className="grid w-full grid-cols-5 h-auto p-2">
-                <TabsTrigger value="punto-venta" className="text-base py-3">
-                  <ShoppingCart className="mr-2 h-5 w-5" />
-                  Punto de Venta
-                </TabsTrigger>
+            <Tabs defaultValue="caja" className="w-full">
+              <TabsList className="grid w-full grid-cols-4 h-auto p-2">
                 <TabsTrigger value="caja" className="text-base py-3">
-                  <Wallet className="mr-2 h-5 w-5" />
-                  Caja
+                  <DollarSign className="mr-2 h-5 w-5" />
+                  Caja / Ventas
                 </TabsTrigger>
                 <TabsTrigger value="ventas" className="text-base py-3">
                   <TrendingUp className="mr-2 h-5 w-5" />
@@ -119,10 +114,6 @@ const Dashboard = () => {
                   Clientes
                 </TabsTrigger>
               </TabsList>
-
-              <TabsContent value="punto-venta" className="mt-6">
-                <PuntoVentaTab />
-              </TabsContent>
 
               <TabsContent value="caja" className="mt-6">
                 <CajaTab />
