@@ -11,10 +11,26 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowDownCircle, ArrowUpCircle, ShoppingCart, ShoppingBag, Wallet } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { toast } from "sonner";
 
 interface Movimiento {
   id_movimiento: string;
@@ -47,6 +63,16 @@ const CajaTab = () => {
     salidas: 0,
     saldo: 0,
     porMetodo: [],
+  });
+
+  // Estados para los diálogos de movimientos
+  const [dialogVenta, setDialogVenta] = useState(false);
+  const [dialogCompra, setDialogCompra] = useState(false);
+  const [dialogRetiro, setDialogRetiro] = useState(false);
+  const [formMovimiento, setFormMovimiento] = useState({
+    monto: "",
+    metodo_pago: "",
+    concepto: "",
   });
 
   useEffect(() => {
@@ -151,6 +177,36 @@ const CajaTab = () => {
     sin_especificar: "Sin especificar",
   };
 
+  const registrarMovimiento = async (tipo: "entrada" | "salida", conceptoBase: string) => {
+    if (!formMovimiento.monto || parseFloat(formMovimiento.monto) <= 0) {
+      toast.error("Ingresa un monto válido");
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from("movimientos_caja" as any).insert({
+      tipo,
+      monto: parseFloat(formMovimiento.monto),
+      metodo_pago: formMovimiento.metodo_pago || null,
+      concepto: formMovimiento.concepto || conceptoBase,
+      user_id: user.id,
+    } as any);
+
+    if (error) {
+      toast.error("Error al registrar el movimiento");
+      return;
+    }
+
+    toast.success(`${conceptoBase} registrada exitosamente`);
+    setFormMovimiento({ monto: "", metodo_pago: "", concepto: "" });
+    setDialogVenta(false);
+    setDialogCompra(false);
+    setDialogRetiro(false);
+    fetchMovimientos();
+  };
+
   const movimientosFiltrados =
     metodoFiltro === "todos"
       ? movimientos
@@ -158,6 +214,190 @@ const CajaTab = () => {
 
   return (
     <div className="space-y-6">
+      {/* Botones de Acción Rápida */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Button
+          onClick={() => setDialogVenta(true)}
+          className="h-24 text-xl font-bold bg-green-600 hover:bg-green-700"
+          size="lg"
+        >
+          <ShoppingCart className="mr-3 h-8 w-8" />
+          Registrar Venta
+        </Button>
+        <Button
+          onClick={() => setDialogCompra(true)}
+          className="h-24 text-xl font-bold bg-orange-600 hover:bg-orange-700"
+          size="lg"
+        >
+          <ShoppingBag className="mr-3 h-8 w-8" />
+          Registrar Compra
+        </Button>
+        <Button
+          onClick={() => setDialogRetiro(true)}
+          className="h-24 text-xl font-bold bg-red-600 hover:bg-red-700"
+          size="lg"
+        >
+          <Wallet className="mr-3 h-8 w-8" />
+          Registrar Retiro
+        </Button>
+      </div>
+
+      {/* Diálogos de Movimientos */}
+      <Dialog open={dialogVenta} onOpenChange={setDialogVenta}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <ShoppingCart className="h-6 w-6 text-green-600" />
+              Registrar Venta en Caja
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="monto-venta" className="text-base">Monto *</Label>
+              <Input
+                id="monto-venta"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={formMovimiento.monto}
+                onChange={(e) => setFormMovimiento({ ...formMovimiento, monto: e.target.value })}
+                className="text-2xl h-14 text-center"
+              />
+            </div>
+            <div>
+              <Label className="text-base">Método de Pago *</Label>
+              <Select
+                value={formMovimiento.metodo_pago}
+                onValueChange={(value) => setFormMovimiento({ ...formMovimiento, metodo_pago: value })}
+              >
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Seleccionar método" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="tarjeta_debito">Tarjeta Débito</SelectItem>
+                  <SelectItem value="tarjeta_credito">Tarjeta Crédito</SelectItem>
+                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                  <SelectItem value="mercadopago">MercadoPago</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-base">Concepto/Descripción</Label>
+              <Textarea
+                placeholder="Detalles de la venta..."
+                value={formMovimiento.concepto}
+                onChange={(e) => setFormMovimiento({ ...formMovimiento, concepto: e.target.value })}
+                className="min-h-20"
+              />
+            </div>
+            <Button
+              onClick={() => registrarMovimiento("entrada", "Venta")}
+              className="w-full h-12 text-lg bg-green-600 hover:bg-green-700"
+            >
+              Confirmar Venta
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialogCompra} onOpenChange={setDialogCompra}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <ShoppingBag className="h-6 w-6 text-orange-600" />
+              Registrar Compra/Gasto
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="monto-compra" className="text-base">Monto *</Label>
+              <Input
+                id="monto-compra"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={formMovimiento.monto}
+                onChange={(e) => setFormMovimiento({ ...formMovimiento, monto: e.target.value })}
+                className="text-2xl h-14 text-center"
+              />
+            </div>
+            <div>
+              <Label className="text-base">Método de Pago</Label>
+              <Select
+                value={formMovimiento.metodo_pago}
+                onValueChange={(value) => setFormMovimiento({ ...formMovimiento, metodo_pago: value })}
+              >
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Seleccionar método" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="tarjeta_debito">Tarjeta Débito</SelectItem>
+                  <SelectItem value="tarjeta_credito">Tarjeta Crédito</SelectItem>
+                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-base">Concepto/Descripción *</Label>
+              <Textarea
+                placeholder="Ej: Compra de mercadería, pago de servicios..."
+                value={formMovimiento.concepto}
+                onChange={(e) => setFormMovimiento({ ...formMovimiento, concepto: e.target.value })}
+                className="min-h-20"
+              />
+            </div>
+            <Button
+              onClick={() => registrarMovimiento("salida", "Compra")}
+              className="w-full h-12 text-lg bg-orange-600 hover:bg-orange-700"
+            >
+              Confirmar Compra
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialogRetiro} onOpenChange={setDialogRetiro}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Wallet className="h-6 w-6 text-red-600" />
+              Registrar Retiro
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="monto-retiro" className="text-base">Monto *</Label>
+              <Input
+                id="monto-retiro"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={formMovimiento.monto}
+                onChange={(e) => setFormMovimiento({ ...formMovimiento, monto: e.target.value })}
+                className="text-2xl h-14 text-center"
+              />
+            </div>
+            <div>
+              <Label className="text-base">Concepto/Motivo *</Label>
+              <Textarea
+                placeholder="Ej: Retiro para gastos personales, caja chica..."
+                value={formMovimiento.concepto}
+                onChange={(e) => setFormMovimiento({ ...formMovimiento, concepto: e.target.value })}
+                className="min-h-20"
+              />
+            </div>
+            <Button
+              onClick={() => registrarMovimiento("salida", "Retiro")}
+              className="w-full h-12 text-lg bg-red-600 hover:bg-red-700"
+            >
+              Confirmar Retiro
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Dashboard Principal */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="shadow-soft hover:shadow-elegant transition-all">

@@ -122,8 +122,8 @@ const ClientesTab = () => {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button className="h-11 text-base">
+              <Plus className="mr-2 h-5 w-5" />
               Nuevo Cliente
             </Button>
           </DialogTrigger>

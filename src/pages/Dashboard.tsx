@@ -12,6 +12,7 @@ import ArticulosTab from "@/components/dashboard/ArticulosTab";
 import VentasTab from "@/components/dashboard/VentasTab";
 import CajaTab from "@/components/dashboard/CajaTab";
 import StatsCards from "@/components/dashboard/StatsCards";
+import PuntoVentaTab from "@/components/dashboard/PuntoVentaTab";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -73,7 +74,7 @@ const Dashboard = () => {
               <Package className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">Boutique Manager</h1>
+              <h1 className="text-xl font-bold">Administración Mariana</h1>
               <p className="text-sm text-muted-foreground">{session.user.email}</p>
             </div>
           </div>
@@ -87,45 +88,56 @@ const Dashboard = () => {
       <main className="container mx-auto px-4 py-8">
         <StatsCards />
 
-        <Card className="mt-8 shadow-elegant">
-          <CardHeader>
-            <CardTitle>Gestión de Tienda</CardTitle>
+        <Card className="mt-8 shadow-elegant border-2">
+          <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
+            <CardTitle className="text-2xl">Sistema de Punto de Venta</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Gestiona ventas, caja, inventario y clientes desde un solo lugar
+            </p>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="clientes" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="clientes">
-                  <Users className="mr-2 h-4 w-4" />
-                  Clientes
+            <Tabs defaultValue="punto-venta" className="w-full">
+              <TabsList className="grid w-full grid-cols-5 h-auto p-2">
+                <TabsTrigger value="punto-venta" className="text-base py-3">
+                  <ShoppingCart className="mr-2 h-5 w-5" />
+                  Punto de Venta
                 </TabsTrigger>
-                <TabsTrigger value="articulos">
-                  <Package className="mr-2 h-4 w-4" />
+                <TabsTrigger value="caja" className="text-base py-3">
+                  <Wallet className="mr-2 h-5 w-5" />
+                  Caja
+                </TabsTrigger>
+                <TabsTrigger value="ventas" className="text-base py-3">
+                  <TrendingUp className="mr-2 h-5 w-5" />
+                  Historial
+                </TabsTrigger>
+                <TabsTrigger value="articulos" className="text-base py-3">
+                  <Package className="mr-2 h-5 w-5" />
                   Artículos
                 </TabsTrigger>
-                <TabsTrigger value="ventas">
-                  <ShoppingCart className="mr-2 h-4 w-4" />
-                  Ventas
-                </TabsTrigger>
-                <TabsTrigger value="caja">
-                  <Wallet className="mr-2 h-4 w-4" />
-                  Caja
+                <TabsTrigger value="clientes" className="text-base py-3">
+                  <Users className="mr-2 h-5 w-5" />
+                  Clientes
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="clientes" className="mt-6">
-                <ClientesTab />
+              <TabsContent value="punto-venta" className="mt-6">
+                <PuntoVentaTab />
               </TabsContent>
 
-              <TabsContent value="articulos" className="mt-6">
-                <ArticulosTab />
+              <TabsContent value="caja" className="mt-6">
+                <CajaTab />
               </TabsContent>
 
               <TabsContent value="ventas" className="mt-6">
                 <VentasTab />
               </TabsContent>
 
-              <TabsContent value="caja" className="mt-6">
-                <CajaTab />
+              <TabsContent value="articulos" className="mt-6">
+                <ArticulosTab />
+              </TabsContent>
+
+              <TabsContent value="clientes" className="mt-6">
+                <ClientesTab />
               </TabsContent>
             </Tabs>
           </CardContent>

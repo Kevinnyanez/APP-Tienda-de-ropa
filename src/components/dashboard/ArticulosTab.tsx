@@ -61,6 +61,20 @@ const ArticulosTab = () => {
     fetchArticulos();
   }, []);
 
+  const sugerirProximoCodigo = async () => {
+    const { data } = await supabase
+      .from("articulos")
+      .select("codigo")
+      .order("codigo", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const ultimoCodigo = data?.codigo ? Number(data.codigo) : 999;
+    const nuevoCodigo = ultimoCodigo + 1;
+    setFormData({ ...formData, codigo: nuevoCodigo.toString() });
+    toast.info(`Código sugerido: ${nuevoCodigo}`);
+  };
+
   const fetchArticulos = async () => {
     const { data, error } = await supabase
       .from("articulos" as any)
@@ -96,7 +110,17 @@ const ArticulosTab = () => {
     } as any);
 
     if (error) {
-      toast.error("No se pudo crear el artículo");
+      console.error("Error al crear artículo:", error);
+      if (error.code === "23505") {
+        // Error de código duplicado
+        toast.error("Ya existe un artículo con este código", {
+          description: `El código ${formData.codigo} ya está en uso. Por favor, usa otro código.`,
+        });
+      } else {
+        toast.error("No se pudo crear el artículo", {
+          description: error.message || "Verifica que todos los campos sean correctos",
+        });
+      }
     } else {
       toast.success("Artículo creado exitosamente");
       setOpen(false);
@@ -213,14 +237,18 @@ const ArticulosTab = () => {
           accept=".xlsx,.xls"
           className="hidden"
         />
-        <Button onClick={() => fileInputRef.current?.click()} variant="outline">
-          <Upload className="mr-2 h-4 w-4" />
+        <Button 
+          onClick={() => fileInputRef.current?.click()} 
+          variant="outline"
+          className="h-11 text-base"
+        >
+          <Upload className="mr-2 h-5 w-5" />
           Importar Excel
         </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button className="h-11 text-base">
+              <Plus className="mr-2 h-5 w-5" />
               Nuevo Artículo
             </Button>
           </DialogTrigger>
@@ -232,15 +260,26 @@ const ArticulosTab = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="codigo">Código (numérico) *</Label>
-                  <Input
-                    id="codigo"
-                    type="number"
-                    value={formData.codigo}
-                    onChange={(e) =>
-                      setFormData({ ...formData, codigo: e.target.value })
-                    }
-                    required
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="codigo"
+                      type="number"
+                      value={formData.codigo}
+                      onChange={(e) =>
+                        setFormData({ ...formData, codigo: e.target.value })
+                      }
+                      required
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={sugerirProximoCodigo}
+                      className="whitespace-nowrap"
+                    >
+                      Sugerir
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="nombre">Nombre/Prenda *</Label>

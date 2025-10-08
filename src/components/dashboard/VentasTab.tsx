@@ -52,7 +52,7 @@ const VentasTab = () => {
   const [open, setOpen] = useState(false);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [formData, setFormData] = useState({
-    id_cliente: "",
+    id_cliente: "sin_cliente",
     total: "",
     metodo_pago: "",
     notas: "",
@@ -99,7 +99,7 @@ const VentasTab = () => {
     const { data: venta, error } = await supabase
       .from("ventas" as any)
       .insert({
-        id_cliente: formData.id_cliente || null,
+        id_cliente: formData.id_cliente === "sin_cliente" ? null : formData.id_cliente,
         total: parseFloat(formData.total),
         metodo_pago: formData.metodo_pago,
         notas: formData.notas || null,
@@ -126,7 +126,7 @@ const VentasTab = () => {
     toast.success("Venta registrada exitosamente");
     setOpen(false);
     setFormData({
-      id_cliente: "",
+      id_cliente: "sin_cliente",
       total: "",
       metodo_pago: "",
       notas: "",
@@ -144,13 +144,18 @@ const VentasTab = () => {
 
   return (
     <div className="space-y-4">
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Registrar Venta
-          </Button>
-        </DialogTrigger>
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Historial de Ventas</h3>
+          <p className="text-sm text-muted-foreground">Últimas 50 ventas registradas</p>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="h-11 text-base bg-green-600 hover:bg-green-700">
+              <Plus className="mr-2 h-5 w-5" />
+              Registrar Venta
+            </Button>
+          </DialogTrigger>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Nueva Venta</DialogTitle>
@@ -159,16 +164,16 @@ const VentasTab = () => {
             <div>
               <Label htmlFor="cliente">Cliente (opcional)</Label>
               <Select
-                value={formData.id_cliente}
+                value={formData.id_cliente || "sin_cliente"}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, id_cliente: value })
+                  setFormData({ ...formData, id_cliente: value === "sin_cliente" ? "" : value })
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Sin cliente" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin cliente</SelectItem>
+                  <SelectItem value="sin_cliente">Sin cliente</SelectItem>
                   {clientes.map((cliente) => (
                     <SelectItem key={cliente.id_cliente} value={cliente.id_cliente}>
                       {cliente.nombre} {cliente.apellido}
@@ -226,7 +231,8 @@ const VentasTab = () => {
             </Button>
           </form>
         </DialogContent>
-      </Dialog>
+        </Dialog>
+      </div>
 
       <div className="border rounded-lg">
         <Table>
