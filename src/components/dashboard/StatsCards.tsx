@@ -59,56 +59,56 @@ const StatsCards = () => {
     <div className="space-y-4">
       {/* Estadísticas Principales de Caja - Más prominentes */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="shadow-elegant hover:shadow-lg transition-all border-2 border-green-200 dark:border-green-900">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 bg-green-50 dark:bg-green-950/20">
-            <CardTitle className="text-base font-semibold text-green-900 dark:text-green-100">
+        <Card className="shadow-elegant hover:shadow-lg transition-all border-2 border-emerald-200 dark:border-emerald-900">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 bg-emerald-50 dark:bg-emerald-950/20">
+            <CardTitle className="text-base font-semibold text-emerald-900 dark:text-emerald-100">
               Entradas Hoy
             </CardTitle>
-            <TrendingUp className="h-6 w-6 text-green-600" />
+            <TrendingUp className="h-6 w-6 text-emerald-500" />
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold text-green-600">{formatCurrency(stats.entradasHoy)}</div>
+            <div className="text-3xl font-bold text-emerald-600">{formatCurrency(stats.entradasHoy)}</div>
             <p className="text-sm text-muted-foreground mt-1">Ingresos del día</p>
           </CardContent>
         </Card>
 
-        <Card className="shadow-elegant hover:shadow-lg transition-all border-2 border-red-200 dark:border-red-900">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 bg-red-50 dark:bg-red-950/20">
-            <CardTitle className="text-base font-semibold text-red-900 dark:text-red-100">
+        <Card className="shadow-elegant hover:shadow-lg transition-all border-2 border-rose-200 dark:border-rose-900">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 bg-rose-50 dark:bg-rose-950/20">
+            <CardTitle className="text-base font-semibold text-rose-900 dark:text-rose-100">
               Salidas Hoy
             </CardTitle>
-            <DollarSign className="h-6 w-6 text-red-600" />
+            <DollarSign className="h-6 w-6 text-rose-500" />
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="text-3xl font-bold text-red-600">{formatCurrency(stats.salidasHoy)}</div>
+            <div className="text-3xl font-bold text-rose-600">{formatCurrency(stats.salidasHoy)}</div>
             <p className="text-sm text-muted-foreground mt-1">Gastos del día</p>
           </CardContent>
         </Card>
 
         <Card className={`shadow-elegant hover:shadow-lg transition-all border-2 ${
           stats.saldoHoy >= 0 
-            ? 'border-blue-200 dark:border-blue-900' 
-            : 'border-orange-200 dark:border-orange-900'
+            ? 'border-sky-200 dark:border-sky-900' 
+            : 'border-amber-200 dark:border-amber-900'
         }`}>
           <CardHeader className={`flex flex-row items-center justify-between space-y-0 pb-3 ${
             stats.saldoHoy >= 0
-              ? 'bg-blue-50 dark:bg-blue-950/20'
-              : 'bg-orange-50 dark:bg-orange-950/20'
+              ? 'bg-sky-50 dark:bg-sky-950/20'
+              : 'bg-amber-50 dark:bg-amber-950/20'
           }`}>
             <CardTitle className={`text-base font-semibold ${
               stats.saldoHoy >= 0
-                ? 'text-blue-900 dark:text-blue-100'
-                : 'text-orange-900 dark:text-orange-100'
+                ? 'text-sky-900 dark:text-sky-100'
+                : 'text-amber-900 dark:text-amber-100'
             }`}>
               Saldo del Día
             </CardTitle>
             <DollarSign className={`h-6 w-6 ${
-              stats.saldoHoy >= 0 ? 'text-blue-600' : 'text-orange-600'
+              stats.saldoHoy >= 0 ? 'text-sky-500' : 'text-amber-500'
             }`} />
           </CardHeader>
           <CardContent className="pt-4">
             <div className={`text-3xl font-bold ${
-              stats.saldoHoy >= 0 ? 'text-blue-600' : 'text-orange-600'
+              stats.saldoHoy >= 0 ? 'text-sky-600' : 'text-amber-600'
             }`}>
               {formatCurrency(stats.saldoHoy)}
             </div>

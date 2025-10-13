@@ -40,7 +40,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ArrowDownCircle, ArrowUpCircle, ShoppingCart, ShoppingBag, Wallet } from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { ArrowDownCircle, ArrowUpCircle, ShoppingCart, ShoppingBag, Wallet, Filter, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
@@ -72,6 +78,8 @@ const CajaTab = () => {
   const [totales, setTotales] = useState({ entradas: 0, salidas: 0, saldo: 0 });
   const [periodo, setPeriodo] = useState<"dia" | "semana" | "mes">("dia");
   const [metodoFiltro, setMetodoFiltro] = useState<string>("todos");
+  const [tipoFiltro, setTipoFiltro] = useState<string>("todos");
+  const [fechaFiltro, setFechaFiltro] = useState<"hoy" | "semana" | "mes" | "todos">("todos");
   const [statsPeriodo, setStatsPeriodo] = useState<PeriodoStats>({
     entradas: 0,
     salidas: 0,
@@ -315,15 +323,8 @@ const CajaTab = () => {
       return;
     }
 
-    // Registrar en caja
-    await supabase.from("movimientos_caja").insert({
-      tipo: "entrada",
-      monto: total,
-      medio_pago: metodoPagoVenta,
-      descripcion: `Venta - ${articulosVenta.length} artículo(s)`,
-      id_venta: venta.id_venta,
-      user_id: user.id,
-    });
+    // ⚠️ NO registrar manualmente en caja - el trigger de la BD lo hace automáticamente
+    // cuando se inserta un detalle_venta con estado 'pago'
 
     toast.success("Venta registrada exitosamente");
     
@@ -367,10 +368,36 @@ const CajaTab = () => {
     fetchMovimientos();
   };
 
-  const movimientosFiltrados =
-    metodoFiltro === "todos"
-      ? movimientos
-      : movimientos.filter((m) => m.metodo_pago === metodoFiltro);
+  const movimientosFiltrados = movimientos.filter((m) => {
+    // Filtro por método de pago
+    if (metodoFiltro !== "todos" && m.metodo_pago !== metodoFiltro) {
+      return false;
+    }
+    
+    // Filtro por tipo
+    if (tipoFiltro !== "todos" && m.tipo !== tipoFiltro) {
+      return false;
+    }
+    
+    // Filtro por fecha
+    if (fechaFiltro !== "todos") {
+      const fechaMov = new Date(m.fecha);
+      const hoy = new Date();
+      
+      if (fechaFiltro === "hoy") {
+        const inicioHoy = new Date(hoy.setHours(0, 0, 0, 0));
+        if (fechaMov < inicioHoy) return false;
+      } else if (fechaFiltro === "semana") {
+        const inicioSemana = new Date(hoy.setDate(hoy.getDate() - 7));
+        if (fechaMov < inicioSemana) return false;
+      } else if (fechaFiltro === "mes") {
+        const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        if (fechaMov < inicioMes) return false;
+      }
+    }
+    
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -378,7 +405,7 @@ const CajaTab = () => {
       <div className="grid gap-4 md:grid-cols-3">
         <Button
           onClick={() => setDialogVenta(true)}
-          className="h-24 text-xl font-bold bg-green-600 hover:bg-green-700"
+          className="h-24 text-xl font-bold bg-emerald-500/90 hover:bg-emerald-500 shadow-soft"
           size="lg"
         >
           <ShoppingCart className="mr-3 h-8 w-8" />
@@ -386,7 +413,7 @@ const CajaTab = () => {
         </Button>
         <Button
           onClick={() => setDialogCompra(true)}
-          className="h-24 text-xl font-bold bg-orange-600 hover:bg-orange-700"
+          className="h-24 text-xl font-bold bg-amber-500/90 hover:bg-amber-500 shadow-soft"
           size="lg"
         >
           <ShoppingBag className="mr-3 h-8 w-8" />
@@ -394,7 +421,7 @@ const CajaTab = () => {
         </Button>
         <Button
           onClick={() => setDialogRetiro(true)}
-          className="h-24 text-xl font-bold bg-red-600 hover:bg-red-700"
+          className="h-24 text-xl font-bold bg-slate-500/90 hover:bg-slate-500 shadow-soft"
           size="lg"
         >
           <Wallet className="mr-3 h-8 w-8" />
@@ -407,7 +434,7 @@ const CajaTab = () => {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
-              <ShoppingCart className="h-6 w-6 text-green-600" />
+              <ShoppingCart className="h-6 w-6 text-emerald-600" />
               Registrar Venta en Caja
             </DialogTitle>
           </DialogHeader>
@@ -514,7 +541,7 @@ const CajaTab = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => eliminarArticuloVenta(index)}
-                          className="text-red-600"
+                          className="text-rose-500 hover:text-rose-600"
                         >
                           ✕
                         </Button>
@@ -550,7 +577,7 @@ const CajaTab = () => {
 
             <Button
               onClick={registrarVentaConArticulos}
-              className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+              className="w-full h-14 text-lg bg-emerald-500/90 hover:bg-emerald-500"
             >
               Confirmar Venta - {formatCurrency(calcularTotalVenta())}
             </Button>
@@ -562,7 +589,7 @@ const CajaTab = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
-              <ShoppingBag className="h-6 w-6 text-orange-600" />
+              <ShoppingBag className="h-6 w-6 text-amber-600" />
               Registrar Compra/Gasto
             </DialogTitle>
           </DialogHeader>
@@ -607,7 +634,7 @@ const CajaTab = () => {
             </div>
             <Button
               onClick={() => registrarMovimiento("salida", "Compra")}
-              className="w-full h-12 text-lg bg-orange-600 hover:bg-orange-700"
+              className="w-full h-12 text-lg bg-amber-500/90 hover:bg-amber-500"
             >
               Confirmar Compra
             </Button>
@@ -619,7 +646,7 @@ const CajaTab = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
-              <Wallet className="h-6 w-6 text-red-600" />
+              <Wallet className="h-6 w-6 text-slate-600" />
               Registrar Retiro
             </DialogTitle>
           </DialogHeader>
@@ -647,7 +674,7 @@ const CajaTab = () => {
             </div>
             <Button
               onClick={() => registrarMovimiento("salida", "Retiro")}
-              className="w-full h-12 text-lg bg-red-600 hover:bg-red-700"
+              className="w-full h-12 text-lg bg-slate-500/90 hover:bg-slate-500"
             >
               Confirmar Retiro
             </Button>
@@ -655,56 +682,11 @@ const CajaTab = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Dashboard Principal */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="shadow-soft hover:shadow-elegant transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Entradas</CardTitle>
-            <ArrowUpCircle className="h-5 w-5 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">
-              {formatCurrency(totales.entradas)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Total histórico</p>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-soft hover:shadow-elegant transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Salidas</CardTitle>
-            <ArrowDownCircle className="h-5 w-5 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-red-600">
-              {formatCurrency(totales.salidas)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Total histórico</p>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-soft hover:shadow-elegant transition-all">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo Total</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-3xl font-bold ${
-                totales.saldo >= 0 ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {formatCurrency(totales.saldo)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Balance general</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Selector de Período */}
+      {/* Resumen del Período Actual */}
       <Card className="shadow-soft">
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <CardTitle>Resumen por Período</CardTitle>
+            <CardTitle>Resumen del Período</CardTitle>
             <div className="flex gap-2">
               <Button
                 variant={periodo === "dia" ? "default" : "outline"}
@@ -732,34 +714,34 @@ const CajaTab = () => {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3 mb-6">
-            <div className="p-4 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900">
-              <p className="text-sm font-medium text-green-900 dark:text-green-100">
+            <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900">
+              <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
                 Entradas
               </p>
-              <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
                 {formatCurrency(statsPeriodo.entradas)}
               </p>
             </div>
-            <div className="p-4 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900">
-              <p className="text-sm font-medium text-red-900 dark:text-red-100">
+            <div className="p-4 rounded-lg bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900">
+              <p className="text-sm font-medium text-rose-900 dark:text-rose-100">
                 Salidas
               </p>
-              <p className="text-2xl font-bold text-red-700 dark:text-red-400">
+              <p className="text-2xl font-bold text-rose-700 dark:text-rose-400">
                 {formatCurrency(statsPeriodo.salidas)}
               </p>
             </div>
             <div
               className={`p-4 rounded-lg border ${
                 statsPeriodo.saldo >= 0
-                  ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900"
-                  : "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900"
+                  ? "bg-sky-50 dark:bg-sky-950/20 border-sky-200 dark:border-sky-900"
+                  : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
               }`}
             >
               <p
                 className={`text-sm font-medium ${
                   statsPeriodo.saldo >= 0
-                    ? "text-blue-900 dark:text-blue-100"
-                    : "text-orange-900 dark:text-orange-100"
+                    ? "text-sky-900 dark:text-sky-100"
+                    : "text-amber-900 dark:text-amber-100"
                 }`}
               >
                 Saldo
@@ -767,8 +749,8 @@ const CajaTab = () => {
               <p
                 className={`text-2xl font-bold ${
                   statsPeriodo.saldo >= 0
-                    ? "text-blue-700 dark:text-blue-400"
-                    : "text-orange-700 dark:text-orange-400"
+                    ? "text-sky-700 dark:text-sky-400"
+                    : "text-amber-700 dark:text-amber-400"
                 }`}
               >
                 {formatCurrency(statsPeriodo.saldo)}
@@ -777,107 +759,224 @@ const CajaTab = () => {
           </div>
 
           {/* Por Método de Pago */}
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Por Método de Pago</h3>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {statsPeriodo.porMetodo.map((stat) => (
-                <div
-                  key={stat.metodo}
-                  className="p-3 rounded-lg bg-muted/50 border border-border"
-                >
-                  <p className="text-xs text-muted-foreground">
-                    {metodoPagoLabels[stat.metodo] || stat.metodo}
-                  </p>
-                  <p className="text-lg font-bold">{formatCurrency(stat.total)}</p>
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="metodos-pago" className="border-none">
+              <AccordionTrigger className="hover:no-underline py-2">
+                <h3 className="text-sm font-semibold">Ver desglose por Método de Pago</h3>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 pt-2">
+                  {statsPeriodo.porMetodo.map((stat) => (
+                    <div
+                      key={stat.metodo}
+                      className="p-3 rounded-lg bg-muted/50 border border-border"
+                    >
+                      <p className="text-xs text-muted-foreground">
+                        {metodoPagoLabels[stat.metodo] || stat.metodo}
+                      </p>
+                      <p className="text-lg font-bold">{formatCurrency(stat.total)}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </CardContent>
       </Card>
 
-      {/* Filtros y Listado de Movimientos */}
+      {/* Totales Históricos (Colapsable) */}
+      <Accordion type="single" collapsible className="w-full">
+        <AccordionItem value="historico" className="border rounded-lg px-4 bg-card shadow-soft">
+          <AccordionTrigger className="hover:no-underline">
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5 text-muted-foreground" />
+              <span className="font-semibold">Ver Totales Históricos</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="grid gap-4 md:grid-cols-3 pt-4">
+              <div className="p-4 rounded-lg bg-muted/30">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium">Total Entradas</p>
+                  <ArrowUpCircle className="h-4 w-4 text-emerald-500" />
+                </div>
+                <p className="text-2xl font-bold text-emerald-600">
+                  {formatCurrency(totales.entradas)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Desde el inicio</p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-muted/30">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium">Total Salidas</p>
+                  <ArrowDownCircle className="h-4 w-4 text-rose-500" />
+                </div>
+                <p className="text-2xl font-bold text-rose-600">
+                  {formatCurrency(totales.salidas)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Desde el inicio</p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-muted/30">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium">Saldo Total</p>
+                </div>
+                <p className={`text-2xl font-bold ${
+                  totales.saldo >= 0 ? "text-emerald-600" : "text-rose-600"
+                }`}>
+                  {formatCurrency(totales.saldo)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Balance general</p>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      {/* Listado de Movimientos con Filtros Avanzados */}
       <Card className="shadow-soft">
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <CardTitle>Movimientos</CardTitle>
             <div className="flex items-center gap-2">
-              <Label htmlFor="metodo-filtro" className="text-sm">Filtrar:</Label>
-              <select
-                id="metodo-filtro"
-                value={metodoFiltro}
-                onChange={(e) => setMetodoFiltro(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-              >
-                <option value="todos">Todos los métodos</option>
-                <option value="efectivo">Efectivo</option>
-                <option value="tarjeta_debito">Tarjeta Débito</option>
-                <option value="tarjeta_credito">Tarjeta Crédito</option>
-                <option value="transferencia">Transferencia</option>
-                <option value="mercadopago">MercadoPago</option>
-                <option value="cuenta_corriente">Cuenta Corriente</option>
-              </select>
+              <Filter className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Movimientos Recientes</CardTitle>
             </div>
+            <Badge variant="outline">{movimientosFiltrados.length} movimientos</Badge>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Filtros mejorados */}
+          <div className="grid gap-3 md:grid-cols-4 p-4 rounded-lg bg-muted/30">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Por Fecha</Label>
+              <Select value={fechaFiltro} onValueChange={(value: any) => setFechaFiltro(value)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="hoy">Hoy</SelectItem>
+                  <SelectItem value="semana">Última Semana</SelectItem>
+                  <SelectItem value="mes">Último Mes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Por Tipo</Label>
+              <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="entrada">Entradas</SelectItem>
+                  <SelectItem value="salida">Salidas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Por Método</Label>
+              <Select value={metodoFiltro} onValueChange={setMetodoFiltro}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="tarjeta_debito">Tarjeta Débito</SelectItem>
+                  <SelectItem value="tarjeta_credito">Tarjeta Crédito</SelectItem>
+                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                  <SelectItem value="mercadopago">MercadoPago</SelectItem>
+                  <SelectItem value="cuenta_corriente">Cuenta Corriente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-end">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  setFechaFiltro("todos");
+                  setTipoFiltro("todos");
+                  setMetodoFiltro("todos");
+                }}
+                className="w-full h-9"
+              >
+                Limpiar Filtros
+              </Button>
+            </div>
+          </div>
+
+          {/* Tabla de movimientos */}
           <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="font-semibold">Fecha</TableHead>
-                  <TableHead className="font-semibold">Tipo</TableHead>
-                  <TableHead className="font-semibold">Monto</TableHead>
-                  <TableHead className="font-semibold">Método de Pago</TableHead>
-                  <TableHead className="font-semibold">Concepto</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {movimientosFiltrados.length === 0 ? (
+            <div className="max-h-[500px] overflow-y-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-muted/50 z-10">
                   <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="text-center text-muted-foreground py-8"
-                    >
-                      No hay movimientos registrados
-                    </TableCell>
+                    <TableHead className="font-semibold">Fecha</TableHead>
+                    <TableHead className="font-semibold">Tipo</TableHead>
+                    <TableHead className="font-semibold">Monto</TableHead>
+                    <TableHead className="font-semibold">Método</TableHead>
+                    <TableHead className="font-semibold">Concepto</TableHead>
                   </TableRow>
-                ) : (
-                  movimientosFiltrados.slice(0, 50).map((mov) => (
-                    <TableRow key={mov.id_movimiento} className="hover:bg-muted/30">
-                      <TableCell className="font-medium">
-                        {format(new Date(mov.fecha), "dd/MM/yyyy HH:mm", {
-                          locale: es,
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={mov.tipo === "entrada" ? "default" : "destructive"}
-                        >
-                          {mov.tipo === "entrada" ? "Entrada" : "Salida"}
-                        </Badge>
-                      </TableCell>
+                </TableHeader>
+                <TableBody>
+                  {movimientosFiltrados.length === 0 ? (
+                    <TableRow>
                       <TableCell
-                        className={`font-bold text-base ${
-                          mov.tipo === "entrada" ? "text-green-600" : "text-red-600"
-                        }`}
+                        colSpan={5}
+                        className="text-center text-muted-foreground py-12"
                       >
-                        {mov.tipo === "entrada" ? "+" : "-"} {formatCurrency(mov.monto)}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">
-                          {metodoPagoLabels[mov.metodo_pago || "sin_especificar"] || "-"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {mov.concepto || "-"}
+                        No hay movimientos que coincidan con los filtros
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    movimientosFiltrados.slice(0, 100).map((mov) => (
+                      <TableRow key={mov.id_movimiento} className="hover:bg-muted/30">
+                        <TableCell className="font-medium text-sm">
+                          {format(new Date(mov.fecha), "dd/MM/yyyy HH:mm", {
+                            locale: es,
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={mov.tipo === "entrada" ? "default" : "destructive"}
+                            className="text-xs"
+                          >
+                            {mov.tipo === "entrada" ? "Entrada" : "Salida"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell
+                          className={`font-bold ${
+                            mov.tipo === "entrada" ? "text-emerald-600" : "text-rose-600"
+                          }`}
+                        >
+                          {mov.tipo === "entrada" ? "+" : "-"} {formatCurrency(mov.monto)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">
+                            {metodoPagoLabels[mov.metodo_pago || "sin_especificar"] || "-"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm max-w-xs truncate">
+                          {mov.concepto || "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
+
+          {movimientosFiltrados.length > 100 && (
+            <p className="text-sm text-muted-foreground text-center">
+              Mostrando los primeros 100 movimientos. Usa los filtros para refinar la búsqueda.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -15,7 +15,7 @@ const Index = () => {
 
           <div className="space-y-4">
             <h1 className="text-5xl font-bold tracking-tight">
-              Boutique Manager
+              Administracion Las Marinas
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl">
               Sistema completo de gestión para tu tienda de ropa. Controla inventario, ventas, clientes y flujo de caja en un solo lugar.

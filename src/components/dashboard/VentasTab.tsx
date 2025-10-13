@@ -186,7 +186,7 @@ const VentasTab = () => {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="h-11 text-base bg-green-600 hover:bg-green-700">
+            <Button className="h-11 text-base bg-emerald-500/90 hover:bg-emerald-500">
               <Plus className="mr-2 h-5 w-5" />
               Registrar Venta
             </Button>

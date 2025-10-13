@@ -224,18 +224,10 @@ const ClienteDetailDialog = ({
       return;
     }
 
-    // Si es pago inmediato, pedir método de pago y registrar en caja
+    // ⚠️ NO registrar manualmente en caja - el trigger de la BD lo hace automáticamente
+    // cuando se inserta un detalle_venta con estado 'pago'
+    
     if (estadoInicial === "pago") {
-      // Aquí deberíamos pedir el método de pago, pero para simplificar,
-      // lo registramos como efectivo por defecto
-      await supabase.from("movimientos_caja").insert({
-        tipo: "entrada",
-        monto: totalVenta,
-        medio_pago: "efectivo",
-        descripcion: `Venta a ${clienteNombre}`,
-        id_venta: venta.id_venta,
-        user_id: user.id,
-      });
       toast.success("Prenda agregada y pagada - Registrado en caja");
     } else {
       toast.success("Prenda agregada exitosamente");
@@ -301,16 +293,10 @@ const ClienteDetailDialog = ({
       return;
     }
 
-    // Si cambia a pago y antes no era pago, registrar entrada en caja
+    // ⚠️ NO registrar manualmente en caja - el trigger de la BD lo hace automáticamente
+    // cuando se actualiza un detalle_venta a estado 'pago'
+    
     if (nuevoEstado === "pago" && estadoAnterior !== "pago") {
-      await supabase.from("movimientos_caja").insert({
-        tipo: "entrada",
-        monto: venta.total,
-        medio_pago: metodoPago || "efectivo",
-        descripcion: `Pago de ${clienteNombre}`,
-        id_venta: ventaId,
-        user_id: user.id,
-      });
       toast.success("Pago registrado en caja");
     } else if (nuevoEstado === "cancelado") {
       toast.info("Venta cancelada - Stock recuperado");
@@ -367,12 +353,12 @@ const ClienteDetailDialog = ({
       },
       pago: { 
         icon: CheckCircle, 
-        className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+        className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
         label: "Pagado" 
       },
       deuda: { 
         icon: AlertCircle, 
-        className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+        className: "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200",
         label: "Debe" 
       },
       cancelado: { 
@@ -418,30 +404,30 @@ const ClienteDetailDialog = ({
               </CardContent>
             </Card>
 
-            <Card className="border-red-200 dark:border-red-900">
+            <Card className="border-rose-200 dark:border-rose-900">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-600" />
+                  <AlertCircle className="w-4 h-4 text-rose-500" />
                   Debe
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600">
+                <div className="text-2xl font-bold text-rose-600">
                   {formatCurrency(totales.deuda)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Pendiente de pago</p>
               </CardContent>
             </Card>
 
-            <Card className="border-green-200 dark:border-green-900">
+            <Card className="border-emerald-200 dark:border-emerald-900">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <CheckCircle className="w-4 h-4 text-emerald-500" />
                   Pagado
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-emerald-600">
                   {formatCurrency(totales.pagado)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Total histórico</p>
@@ -612,7 +598,7 @@ const ClienteDetailDialog = ({
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDeleteVenta(venta.id_venta)}
-                              className="text-red-600 hover:text-red-700"
+                              className="text-rose-500 hover:text-rose-600"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -653,7 +639,7 @@ const ClienteDetailDialog = ({
             <div className="flex gap-2 pt-4">
               <Button
                 onClick={confirmarPagoConMetodo}
-                className="flex-1 h-12 bg-green-600 hover:bg-green-700"
+                className="flex-1 h-12 bg-emerald-500/90 hover:bg-emerald-500"
               >
                 Confirmar Pago
               </Button>

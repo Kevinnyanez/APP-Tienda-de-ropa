@@ -2,24 +2,39 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogOut, Users, Package, TrendingUp, DollarSign } from "lucide-react";
+import { LogOut, Users, Package, TrendingUp, DollarSign, Store, LayoutDashboard, BarChart3, ShoppingCart, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import type { Session } from "@supabase/supabase-js";
 import ClientesTab from "@/components/dashboard/ClientesTab";
 import ArticulosTab from "@/components/dashboard/ArticulosTab";
 import VentasTab from "@/components/dashboard/VentasTab";
+import PuntoVentaTab from "@/components/dashboard/PuntoVentaTab";
 import CajaTab from "@/components/dashboard/CajaTab";
+import ReportesTab from "@/components/dashboard/ReportesTab";
 import StatsCards from "@/components/dashboard/StatsCards";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  SidebarSeparator,
+} from "@/components/ui/sidebar";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState<"dashboard" | "pos" | "caja" | "ventas" | "articulos" | "clientes" | "reportes">("dashboard");
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
@@ -30,7 +45,6 @@ const Dashboard = () => {
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (!session) {
@@ -64,77 +78,138 @@ const Dashboard = () => {
     return null;
   }
 
+  const menuItems = [
+    { id: "dashboard" as const, label: "Panel Principal", icon: LayoutDashboard },
+    { id: "pos" as const, label: "Punto de Venta", icon: ShoppingCart },
+    { id: "caja" as const, label: "Gestión de Caja", icon: Wallet },
+    { id: "ventas" as const, label: "Historial de Ventas", icon: TrendingUp },
+    { id: "reportes" as const, label: "Reportes", icon: BarChart3 },
+    { id: "articulos" as const, label: "Inventario", icon: Package },
+    { id: "clientes" as const, label: "Clientes", icon: Users },
+  ];
+
+  const renderContent = () => {
+    switch (activeSection) {
+      case "dashboard":
+        return <StatsCards />;
+      case "pos":
+        return <PuntoVentaTab />;
+      case "caja":
+        return <CajaTab />;
+      case "ventas":
+        return <VentasTab />;
+      case "reportes":
+        return <ReportesTab />;
+      case "articulos":
+        return <ArticulosTab />;
+      case "clientes":
+        return <ClientesTab />;
+      default:
+        return <StatsCards />;
+    }
+  };
+
+  const getSectionTitle = () => {
+    switch (activeSection) {
+      case "dashboard":
+        return "Panel Principal";
+      case "pos":
+        return "Punto de Venta";
+      case "caja":
+        return "Gestión de Caja y Movimientos";
+      case "ventas":
+        return "Historial de Ventas";
+      case "reportes":
+        return "Reportes y Estadísticas";
+      case "articulos":
+        return "Gestión de Inventario";
+      case "clientes":
+        return "Gestión de Clientes";
+      default:
+        return "Panel Principal";
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center">
-              <Package className="w-6 h-6 text-primary" />
+    <SidebarProvider defaultOpen={true}>
+      <div className="flex min-h-screen w-full bg-gradient-to-br from-background via-muted/20 to-background">
+        {/* Sidebar */}
+        <Sidebar>
+          <SidebarHeader className="border-b">
+            <div className="flex items-center gap-3 px-2 py-2">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center">
+                <Store className="w-6 h-6 text-primary" />
+              </div>
+              <div className="flex flex-col">
+                <h2 className="text-lg font-bold">Las Marinas</h2>
+                <p className="text-xs text-muted-foreground">Sistema POS</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold">Administración Mariana</h1>
-              <p className="text-sm text-muted-foreground">{session.user.email}</p>
+          </SidebarHeader>
+          
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {menuItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <SidebarMenuItem key={item.id}>
+                        <SidebarMenuButton
+                          onClick={() => setActiveSection(item.id)}
+                          isActive={activeSection === item.id}
+                          size="lg"
+                          tooltip={item.label}
+                        >
+                          <Icon className="w-5 h-5" />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+
+          <SidebarFooter className="border-t">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <div className="px-2 py-2">
+                  <div className="flex flex-col gap-1 mb-3">
+                    <p className="text-sm font-medium truncate">{session.user.email}</p>
+                    <p className="text-xs text-muted-foreground">Administrador</p>
+                  </div>
+                  <Button onClick={handleSignOut} variant="outline" size="sm" className="w-full">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Cerrar Sesión
+                  </Button>
+                </div>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+        </Sidebar>
+
+        {/* Main Content */}
+        <SidebarInset>
+          {/* Header */}
+          <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-card/50 backdrop-blur-sm px-4">
+            <SidebarTrigger className="-ml-1" />
+            <SidebarSeparator orientation="vertical" className="mr-2 h-4" />
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">{getSectionTitle()}</h1>
             </div>
-          </div>
-          <Button onClick={handleSignOut} variant="outline" size="sm">
-            <LogOut className="mr-2 h-4 w-4" />
-            Salir
-          </Button>
-        </div>
-      </header>
+          </header>
 
-      <main className="container mx-auto px-4 py-8">
-        <StatsCards />
-
-        <Card className="mt-8 shadow-elegant border-2">
-          <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
-            <CardTitle className="text-2xl">Sistema de Punto de Venta</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Gestiona ventas, caja, inventario y clientes desde un solo lugar
-            </p>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="caja" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 h-auto p-2">
-                <TabsTrigger value="caja" className="text-base py-3">
-                  <DollarSign className="mr-2 h-5 w-5" />
-                  Caja / Ventas
-                </TabsTrigger>
-                <TabsTrigger value="ventas" className="text-base py-3">
-                  <TrendingUp className="mr-2 h-5 w-5" />
-                  Historial
-                </TabsTrigger>
-                <TabsTrigger value="articulos" className="text-base py-3">
-                  <Package className="mr-2 h-5 w-5" />
-                  Artículos
-                </TabsTrigger>
-                <TabsTrigger value="clientes" className="text-base py-3">
-                  <Users className="mr-2 h-5 w-5" />
-                  Clientes
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="caja" className="mt-6">
-                <CajaTab />
-              </TabsContent>
-
-              <TabsContent value="ventas" className="mt-6">
-                <VentasTab />
-              </TabsContent>
-
-              <TabsContent value="articulos" className="mt-6">
-                <ArticulosTab />
-              </TabsContent>
-
-              <TabsContent value="clientes" className="mt-6">
-                <ClientesTab />
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+          {/* Main Content Area */}
+          <main className="flex-1 p-6">
+            <div className="mx-auto max-w-7xl">
+              {renderContent()}
+            </div>
+          </main>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 };
 

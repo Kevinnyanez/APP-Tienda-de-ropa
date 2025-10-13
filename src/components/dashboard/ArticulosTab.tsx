@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Upload } from "lucide-react";
+import { Plus, Search, Upload, Clock } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { formatCurrency } from "@/lib/currency";
@@ -431,15 +431,32 @@ const ArticulosTab = () => {
                   </TableCell>
                   <TableCell>{formatCurrency(art.precio_venta)}</TableCell>
                   <TableCell>
-                    <Badge variant={art.stock_disponible > 0 ? "default" : "destructive"}>
-                      {art.stock_disponible}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge 
+                        variant={art.stock_disponible > 0 ? "default" : "destructive"}
+                        className="w-fit"
+                      >
+                        {art.stock_disponible}
+                      </Badge>
+                      {art.stock_disponible === 0 && art.stock_reservado > 0 && (
+                        <span className="text-xs text-muted-foreground">Sin stock</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {art.stock_reservado > 0 ? (
-                      <Badge variant="secondary">{art.stock_reservado}</Badge>
+                      <div className="flex flex-col gap-1">
+                        <Badge 
+                          variant="outline" 
+                          className="bg-yellow-50 text-yellow-700 border-yellow-200 w-fit"
+                        >
+                          <Clock className="h-3 w-3 mr-1" />
+                          {art.stock_reservado}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">En espera</span>
+                      </div>
                     ) : (
-                      "-"
+                      <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
                 </TableRow>

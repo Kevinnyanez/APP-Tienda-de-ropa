@@ -19,8 +19,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { formatCurrency } from "@/lib/currency";
 
 interface Cliente {
   id_cliente: string;
@@ -31,6 +33,10 @@ interface Cliente {
   email: string | null;
   direccion: string | null;
   activo: boolean | null;
+  total_pendiente?: number;
+  total_deuda?: number;
+  items_pendientes?: number;
+  items_deuda?: number;
 }
 
 const ClientesTab = () => {
@@ -63,9 +69,51 @@ const ClientesTab = () => {
 
     if (error) {
       toast.error("Error al cargar clientes");
-    } else {
-      setClientes(data || []);
+      return;
     }
+
+    if (!data) {
+      setClientes([]);
+      return;
+    }
+
+    // Obtener deudas y pendientes de cada cliente
+    const clientesConDeudas = await Promise.all(
+      data.map(async (cliente) => {
+        const { data: detalles } = await supabase
+          .from("detalle_venta")
+          .select("estado_articulo, cantidad, precio_unitario")
+          .eq("id_cliente", cliente.id_cliente);
+
+        let total_pendiente = 0;
+        let total_deuda = 0;
+        let items_pendientes = 0;
+        let items_deuda = 0;
+
+        if (detalles) {
+          detalles.forEach((detalle: any) => {
+            const subtotal = detalle.cantidad * detalle.precio_unitario;
+            if (detalle.estado_articulo === "pendiente") {
+              total_pendiente += subtotal;
+              items_pendientes += detalle.cantidad;
+            } else if (detalle.estado_articulo === "deuda") {
+              total_deuda += subtotal;
+              items_deuda += detalle.cantidad;
+            }
+          });
+        }
+
+        return {
+          ...cliente,
+          total_pendiente,
+          total_deuda,
+          items_pendientes,
+          items_deuda,
+        };
+      })
+    );
+
+    setClientes(clientesConDeudas);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -205,43 +253,93 @@ const ClientesTab = () => {
         </Dialog>
       </div>
 
-      <div className="border rounded-lg">
+      <div className="border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
-              <TableHead>DNI</TableHead>
-              <TableHead>Teléfono</TableHead>
-              <TableHead>Email</TableHead>
+              <TableHead>DNI / Teléfono</TableHead>
+              <TableHead className="text-center">Probándose</TableHead>
+              <TableHead className="text-center">Debe</TableHead>
+              <TableHead className="text-right">Estado</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredClientes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground">
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
                   No hay clientes registrados
                 </TableCell>
               </TableRow>
             ) : (
-              filteredClientes.map((cliente) => (
-                <TableRow
-                  key={cliente.id_cliente}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() =>
-                    setSelectedCliente({
-                      id: cliente.id_cliente,
-                      nombre: `${cliente.nombre} ${cliente.apellido}`,
-                    })
-                  }
-                >
-                  <TableCell className="font-medium">
-                    {cliente.nombre} {cliente.apellido}
-                  </TableCell>
-                  <TableCell>{cliente.dni || "-"}</TableCell>
-                  <TableCell>{cliente.telefono || "-"}</TableCell>
-                  <TableCell>{cliente.email || "-"}</TableCell>
-                </TableRow>
-              ))
+              filteredClientes.map((cliente) => {
+                const tienePendientes = (cliente.total_pendiente || 0) > 0;
+                const tieneDeuda = (cliente.total_deuda || 0) > 0;
+                const tieneActividad = tienePendientes || tieneDeuda;
+
+                return (
+                  <TableRow
+                    key={cliente.id_cliente}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() =>
+                      setSelectedCliente({
+                        id: cliente.id_cliente,
+                        nombre: `${cliente.nombre} ${cliente.apellido}`,
+                      })
+                    }
+                  >
+                    <TableCell className="font-medium">
+                      {cliente.nombre} {cliente.apellido}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {cliente.dni && <div>{cliente.dni}</div>}
+                      {cliente.telefono && <div>{cliente.telefono}</div>}
+                      {!cliente.dni && !cliente.telefono && "-"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {tienePendientes ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {cliente.items_pendientes}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {formatCurrency(cliente.total_pendiente || 0)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {tieneDeuda ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            {cliente.items_deuda}
+                          </Badge>
+                          <span className="text-xs font-semibold text-rose-600">
+                            {formatCurrency(cliente.total_deuda || 0)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {tieneActividad ? (
+                        <Badge variant={tieneDeuda ? "destructive" : "secondary"}>
+                          {tieneDeuda ? "Con deuda" : "Probándose"}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          Al día
+                        </Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
