@@ -25,6 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Plus, Search, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -54,6 +62,9 @@ const VentasTab = () => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroFecha, setFiltroFecha] = useState<"hoy" | "semana" | "mes" | "todas">("todas");
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalRegistros, setTotalRegistros] = useState(0);
+  const registrosPorPagina = 20;
   const [formData, setFormData] = useState({
     id_cliente: "sin_cliente",
     total: "",
@@ -64,9 +75,25 @@ const VentasTab = () => {
   useEffect(() => {
     fetchVentas();
     fetchClientes();
-  }, []);
+  }, [paginaActual]);
+
+  useEffect(() => {
+    // Resetear a la primera página cuando cambian los filtros
+    setPaginaActual(1);
+  }, [searchTerm, filtroFecha]);
 
   const fetchVentas = async () => {
+    // Primero obtener el total de registros
+    const { count } = await supabase
+      .from("ventas")
+      .select("*", { count: "exact", head: true });
+
+    if (count) {
+      setTotalRegistros(count);
+    }
+
+    // Luego obtener la página actual
+    const desde = (paginaActual - 1) * registrosPorPagina;
     const { data, error } = await supabase
       .from("ventas")
       .select(`
@@ -74,7 +101,7 @@ const VentasTab = () => {
         clientes (nombre, apellido)
       `)
       .order("fecha", { ascending: false })
-      .limit(50);
+      .range(desde, desde + registrosPorPagina - 1);
 
     if (!error && data) {
       setVentas(data as any);
@@ -134,6 +161,7 @@ const VentasTab = () => {
       metodo_pago: "",
       notas: "",
     });
+    setPaginaActual(1); // Volver a la primera página
     fetchVentas();
   };
 
@@ -334,6 +362,66 @@ const VentasTab = () => {
           </TableBody>
         </Table>
       </div>
+
+      {/* Paginación */}
+      {totalRegistros > registrosPorPagina && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Mostrando {Math.min((paginaActual - 1) * registrosPorPagina + 1, totalRegistros)} - {Math.min(paginaActual * registrosPorPagina, totalRegistros)} de {totalRegistros} ventas
+          </p>
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  onClick={() => setPaginaActual(Math.max(1, paginaActual - 1))}
+                  className={paginaActual === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              
+              {Array.from({ length: Math.ceil(totalRegistros / registrosPorPagina) }, (_, i) => i + 1)
+                .filter(pagina => {
+                  // Mostrar primera página, última página, página actual y vecinas
+                  const totalPaginas = Math.ceil(totalRegistros / registrosPorPagina);
+                  return (
+                    pagina === 1 ||
+                    pagina === totalPaginas ||
+                    (pagina >= paginaActual - 1 && pagina <= paginaActual + 1)
+                  );
+                })
+                .map((pagina, index, array) => {
+                  // Agregar elipsis si hay saltos
+                  const elementos = [];
+                  if (index > 0 && pagina - array[index - 1] > 1) {
+                    elementos.push(
+                      <PaginationItem key={`ellipsis-${pagina}`}>
+                        <span className="px-2">...</span>
+                      </PaginationItem>
+                    );
+                  }
+                  elementos.push(
+                    <PaginationItem key={pagina}>
+                      <PaginationLink
+                        onClick={() => setPaginaActual(pagina)}
+                        isActive={paginaActual === pagina}
+                        className="cursor-pointer"
+                      >
+                        {pagina}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                  return elementos;
+                })}
+              
+              <PaginationItem>
+                <PaginationNext 
+                  onClick={() => setPaginaActual(Math.min(Math.ceil(totalRegistros / registrosPorPagina), paginaActual + 1))}
+                  className={paginaActual >= Math.ceil(totalRegistros / registrosPorPagina) ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
     </div>
   );
 };

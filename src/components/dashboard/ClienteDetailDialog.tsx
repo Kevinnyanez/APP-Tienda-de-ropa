@@ -325,22 +325,56 @@ const ClienteDetailDialog = ({
   };
 
   const handleDeleteVenta = async (ventaId: string) => {
-    if (!confirm("¿Eliminar esta venta? Se recuperará el stock.")) return;
+    const venta = ventas.find((v) => v.id_venta === ventaId);
+    if (!venta) return;
 
-    // Los detalles se eliminan automáticamente por CASCADE
-    // El trigger recuperará el stock
-    const { error } = await supabase
-      .from("ventas")
-      .delete()
-      .eq("id_venta", ventaId);
+    // Determinar el comportamiento según el estado de la venta
+    if (venta.estado === "pago") {
+      // Si ya está pagado, solo confirmamos que quiere eliminar el historial
+      // NO se recupera stock ni se elimina el dinero de caja
+      if (!confirm("¿Eliminar este registro del historial?\n\nNOTA: El pago ya fue registrado en caja y NO se eliminará. Solo se borrará este registro visual del historial del cliente.")) {
+        return;
+      }
 
-    if (error) {
-      toast.error("No se pudo eliminar la venta");
+      // Simplemente eliminamos el registro de la venta
+      // El dinero ya está en caja y se queda ahí
+      const { error } = await supabase
+        .from("ventas")
+        .delete()
+        .eq("id_venta", ventaId);
+
+      if (error) {
+        toast.error("No se pudo eliminar el registro");
+      } else {
+        toast.success("Registro eliminado del historial (el pago permanece en caja)");
+        fetchVentas();
+        onUpdate();
+      }
     } else {
-      toast.success("Venta eliminada - Stock recuperado");
-      fetchVentas();
-      fetchArticulos();
-      onUpdate();
+      // Para estados "pendiente", "deuda" o "cancelado"
+      // SÍ se recupera el stock porque no hubo transacción real
+      const estadoTexto = venta.estado === "pendiente" ? "en prueba" : 
+                          venta.estado === "deuda" ? "en deuda" : "cancelada";
+      
+      if (!confirm(`¿Eliminar esta venta ${estadoTexto}?\n\nSe recuperará el stock de los artículos.`)) {
+        return;
+      }
+
+      // Los detalles se eliminan automáticamente por CASCADE
+      // El trigger recuperará el stock automáticamente
+      const { error } = await supabase
+        .from("ventas")
+        .delete()
+        .eq("id_venta", ventaId);
+
+      if (error) {
+        toast.error("No se pudo eliminar la venta");
+      } else {
+        toast.success("Venta eliminada - Stock recuperado");
+        fetchVentas();
+        fetchArticulos();
+        onUpdate();
+      }
     }
   };
 

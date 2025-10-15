@@ -18,8 +18,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Upload, Clock } from "lucide-react";
+import { Plus, Search, Upload, Clock, Edit } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { formatCurrency } from "@/lib/currency";
@@ -44,6 +52,12 @@ const ArticulosTab = () => {
   const [articulos, setArticulos] = useState<Articulo[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [open, setOpen] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
+  const [articuloEditando, setArticuloEditando] = useState<Articulo | null>(null);
+  const [modoStock, setModoStock] = useState<"agregar" | "reemplazar">("agregar");
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalRegistros, setTotalRegistros] = useState(0);
+  const registrosPorPagina = 25;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     codigo: "",
@@ -57,10 +71,25 @@ const ArticulosTab = () => {
     precio_venta: "",
     stock_disponible: "",
   });
+  const [formEditData, setFormEditData] = useState({
+    nombre: "",
+    descripcion: "",
+    categoria: "",
+    talle: "",
+    color: "",
+    temporada: "",
+    precio_costo: "",
+    precio_venta: "",
+    stock_adicional: "",
+  });
 
   useEffect(() => {
     fetchArticulos();
-  }, []);
+  }, [paginaActual]);
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [searchTerm]);
 
   const sugerirProximoCodigo = async () => {
     const { data } = await supabase
@@ -77,11 +106,24 @@ const ArticulosTab = () => {
   };
 
   const fetchArticulos = async () => {
+    // Obtener el total de registros
+    const { count } = await supabase
+      .from("articulos")
+      .select("*", { count: "exact", head: true })
+      .eq("activo", true);
+
+    if (count) {
+      setTotalRegistros(count);
+    }
+
+    // Obtener la página actual
+    const desde = (paginaActual - 1) * registrosPorPagina;
     const { data, error } = await supabase
       .from("articulos" as any)
       .select("*")
       .eq("activo", true)
-      .order("nombre");
+      .order("nombre")
+      .range(desde, desde + registrosPorPagina - 1);
 
     if (error) {
       toast.error("Error al cargar artículos");
@@ -137,6 +179,7 @@ const ArticulosTab = () => {
         precio_venta: "",
         stock_disponible: "",
       });
+      setPaginaActual(1);
       fetchArticulos();
     }
   };
@@ -201,6 +244,7 @@ const ArticulosTab = () => {
           toast.error("Error al importar artículos");
         } else {
           toast.success(`${articulosToInsert.length} artículos importados`);
+          setPaginaActual(1);
           fetchArticulos();
         }
       } catch (error) {
@@ -209,6 +253,66 @@ const ArticulosTab = () => {
     };
     reader.readAsArrayBuffer(file);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleEditarArticulo = (articulo: Articulo) => {
+    setArticuloEditando(articulo);
+    setFormEditData({
+      nombre: articulo.nombre,
+      descripcion: articulo.descripcion || "",
+      categoria: articulo.categoria || "",
+      talle: articulo.talle || "",
+      color: articulo.color || "",
+      temporada: articulo.temporada || "",
+      precio_costo: articulo.precio_costo.toString(),
+      precio_venta: articulo.precio_venta.toString(),
+      stock_adicional: "",
+    });
+    setModoStock("agregar");
+    setOpenEdit(true);
+  };
+
+  const handleGuardarEdicion = async () => {
+    if (!articuloEditando) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Calcular el nuevo stock
+    let nuevoStock = articuloEditando.stock_disponible;
+    if (formEditData.stock_adicional) {
+      const stockNum = parseInt(formEditData.stock_adicional);
+      if (modoStock === "agregar") {
+        nuevoStock = articuloEditando.stock_disponible + stockNum;
+      } else {
+        nuevoStock = stockNum;
+      }
+    }
+
+    const { error } = await supabase
+      .from("articulos")
+      .update({
+        nombre: formEditData.nombre,
+        descripcion: formEditData.descripcion || null,
+        categoria: formEditData.categoria || null,
+        talle: formEditData.talle || null,
+        color: formEditData.color || null,
+        temporada: formEditData.temporada || null,
+        precio_costo: parseFloat(formEditData.precio_costo),
+        precio_venta: parseFloat(formEditData.precio_venta),
+        stock_disponible: nuevoStock,
+      })
+      .eq("id_articulo", articuloEditando.id_articulo);
+
+    if (error) {
+      console.error("Error al actualizar artículo:", error);
+      toast.error("No se pudo actualizar el artículo");
+    } else {
+      toast.success("Artículo actualizado exitosamente");
+      setOpenEdit(false);
+      setArticuloEditando(null);
+      fetchArticulos();
+    }
   };
 
   const filteredArticulos = articulos.filter(
@@ -394,6 +498,189 @@ const ArticulosTab = () => {
         </Dialog>
       </div>
 
+      {/* Diálogo de Edición */}
+      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Artículo - {articuloEditando?.codigo}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-nombre">Nombre/Prenda *</Label>
+                <Input
+                  id="edit-nombre"
+                  value={formEditData.nombre}
+                  onChange={(e) =>
+                    setFormEditData({ ...formEditData, nombre: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-descripcion">Descripción</Label>
+                <Input
+                  id="edit-descripcion"
+                  value={formEditData.descripcion}
+                  onChange={(e) =>
+                    setFormEditData({ ...formEditData, descripcion: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-talle">Talle</Label>
+                <Input
+                  id="edit-talle"
+                  value={formEditData.talle}
+                  onChange={(e) =>
+                    setFormEditData({ ...formEditData, talle: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-color">Color</Label>
+                <Input
+                  id="edit-color"
+                  value={formEditData.color}
+                  onChange={(e) =>
+                    setFormEditData({ ...formEditData, color: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-temporada">Temporada</Label>
+                <Input
+                  id="edit-temporada"
+                  value={formEditData.temporada}
+                  onChange={(e) =>
+                    setFormEditData({ ...formEditData, temporada: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-categoria">Categoría</Label>
+              <Input
+                id="edit-categoria"
+                value={formEditData.categoria}
+                onChange={(e) =>
+                  setFormEditData({ ...formEditData, categoria: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-precio_costo">Precio Costo *</Label>
+                <Input
+                  id="edit-precio_costo"
+                  type="number"
+                  step="0.01"
+                  value={formEditData.precio_costo}
+                  onChange={(e) =>
+                    setFormEditData({ ...formEditData, precio_costo: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-precio_venta">Precio Venta *</Label>
+                <Input
+                  id="edit-precio_venta"
+                  type="number"
+                  step="0.01"
+                  value={formEditData.precio_venta}
+                  onChange={(e) =>
+                    setFormEditData({ ...formEditData, precio_venta: e.target.value })
+                  }
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Sección de Stock */}
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-semibold">Actualizar Stock</Label>
+                <Badge variant="outline" className="text-base">
+                  Stock actual: {articuloEditando?.stock_disponible || 0}
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Modo de actualización</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={modoStock === "agregar" ? "default" : "outline"}
+                    onClick={() => setModoStock("agregar")}
+                    className="flex-1"
+                  >
+                    Agregar Stock
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={modoStock === "reemplazar" ? "default" : "outline"}
+                    onClick={() => setModoStock("reemplazar")}
+                    className="flex-1"
+                  >
+                    Reemplazar Stock
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {modoStock === "agregar" 
+                    ? "El stock ingresado se sumará al stock actual"
+                    : "El stock ingresado reemplazará completamente el stock actual"}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-stock">
+                  {modoStock === "agregar" ? "Cantidad a agregar" : "Nuevo stock total"}
+                </Label>
+                <Input
+                  id="edit-stock"
+                  type="number"
+                  min="0"
+                  placeholder={modoStock === "agregar" ? "Ej: 10 (se sumará)" : "Ej: 25 (será el total)"}
+                  value={formEditData.stock_adicional}
+                  onChange={(e) =>
+                    setFormEditData({ ...formEditData, stock_adicional: e.target.value })
+                  }
+                />
+                {formEditData.stock_adicional && (
+                  <p className="text-sm font-medium text-primary">
+                    {modoStock === "agregar"
+                      ? `Nuevo stock: ${articuloEditando?.stock_disponible || 0} + ${formEditData.stock_adicional} = ${(articuloEditando?.stock_disponible || 0) + parseInt(formEditData.stock_adicional)}`
+                      : `Nuevo stock: ${formEditData.stock_adicional}`}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleGuardarEdicion} className="flex-1">
+                Guardar Cambios
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setOpenEdit(false);
+                  setArticuloEditando(null);
+                }}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="border rounded-lg">
         <Table>
           <TableHeader>
@@ -406,12 +693,13 @@ const ArticulosTab = () => {
               <TableHead>Precio</TableHead>
               <TableHead>Stock Disp.</TableHead>
               <TableHead>Reservado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredArticulos.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   No hay artículos registrados
                 </TableCell>
               </TableRow>
@@ -459,12 +747,80 @@ const ArticulosTab = () => {
                       <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditarArticulo(art)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
       </div>
+
+      {/* Paginación */}
+      {totalRegistros > registrosPorPagina && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Mostrando {Math.min((paginaActual - 1) * registrosPorPagina + 1, totalRegistros)} - {Math.min(paginaActual * registrosPorPagina, totalRegistros)} de {totalRegistros} artículos
+          </p>
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  onClick={() => setPaginaActual(Math.max(1, paginaActual - 1))}
+                  className={paginaActual === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              
+              {Array.from({ length: Math.ceil(totalRegistros / registrosPorPagina) }, (_, i) => i + 1)
+                .filter(pagina => {
+                  const totalPaginas = Math.ceil(totalRegistros / registrosPorPagina);
+                  return (
+                    pagina === 1 ||
+                    pagina === totalPaginas ||
+                    (pagina >= paginaActual - 1 && pagina <= paginaActual + 1)
+                  );
+                })
+                .map((pagina, index, array) => {
+                  const elementos = [];
+                  if (index > 0 && pagina - array[index - 1] > 1) {
+                    elementos.push(
+                      <PaginationItem key={`ellipsis-${pagina}`}>
+                        <span className="px-2">...</span>
+                      </PaginationItem>
+                    );
+                  }
+                  elementos.push(
+                    <PaginationItem key={pagina}>
+                      <PaginationLink
+                        onClick={() => setPaginaActual(pagina)}
+                        isActive={paginaActual === pagina}
+                        className="cursor-pointer"
+                      >
+                        {pagina}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                  return elementos;
+                })}
+              
+              <PaginationItem>
+                <PaginationNext 
+                  onClick={() => setPaginaActual(Math.min(Math.ceil(totalRegistros / registrosPorPagina), paginaActual + 1))}
+                  className={paginaActual >= Math.ceil(totalRegistros / registrosPorPagina) ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
     </div>
   );
 };

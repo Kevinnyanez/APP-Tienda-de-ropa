@@ -46,6 +46,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { ArrowDownCircle, ArrowUpCircle, ShoppingCart, ShoppingBag, Wallet, Filter, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -80,6 +88,9 @@ const CajaTab = () => {
   const [metodoFiltro, setMetodoFiltro] = useState<string>("todos");
   const [tipoFiltro, setTipoFiltro] = useState<string>("todos");
   const [fechaFiltro, setFechaFiltro] = useState<"hoy" | "semana" | "mes" | "todos">("todos");
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalRegistros, setTotalRegistros] = useState(0);
+  const registrosPorPagina = 30;
   const [statsPeriodo, setStatsPeriodo] = useState<PeriodoStats>({
     entradas: 0,
     salidas: 0,
@@ -93,6 +104,12 @@ const CajaTab = () => {
   const [dialogRetiro, setDialogRetiro] = useState(false);
   const [formMovimiento, setFormMovimiento] = useState({
     monto: "",
+    metodo_pago: "",
+    concepto: "",
+  });
+  const [formRetiro, setFormRetiro] = useState({
+    monto: "",
+    motivo: "",
     metodo_pago: "",
     concepto: "",
   });
@@ -111,11 +128,15 @@ const CajaTab = () => {
     fetchMovimientos();
     fetchArticulos();
     fetchClientes();
-  }, []);
+  }, [paginaActual]);
 
   useEffect(() => {
     calcularStatsPeriodo();
   }, [movimientos, periodo]);
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [metodoFiltro, tipoFiltro, fechaFiltro]);
 
   const calcularStatsPeriodo = () => {
     const now = new Date();
@@ -167,11 +188,43 @@ const CajaTab = () => {
   };
 
   const fetchMovimientos = async () => {
-    const { data, error } = await supabase
-      .from("movimientos_caja")
-      .select("*")
+    // Construir la query base
+    let query = supabase.from("movimientos_caja").select("*", { count: "exact" });
+
+    // Aplicar filtros
+    if (metodoFiltro !== "todos") {
+      query = query.or(`metodo_pago.eq.${metodoFiltro},medio_pago.eq.${metodoFiltro}`);
+    }
+
+    if (tipoFiltro !== "todos") {
+      query = query.eq("tipo", tipoFiltro);
+    }
+
+    if (fechaFiltro !== "todos") {
+      const hoy = new Date();
+      if (fechaFiltro === "hoy") {
+        const inicioHoy = new Date(hoy.setHours(0, 0, 0, 0));
+        query = query.gte("fecha", inicioHoy.toISOString());
+      } else if (fechaFiltro === "semana") {
+        const inicioSemana = new Date(hoy.setDate(hoy.getDate() - 7));
+        query = query.gte("fecha", inicioSemana.toISOString());
+      } else if (fechaFiltro === "mes") {
+        const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        query = query.gte("fecha", inicioMes.toISOString());
+      }
+    }
+
+    // Obtener el total de registros con los filtros aplicados
+    const { count } = await query;
+    if (count !== null) {
+      setTotalRegistros(count);
+    }
+
+    // Obtener la página actual
+    const desde = (paginaActual - 1) * registrosPorPagina;
+    const { data, error } = await query
       .order("fecha", { ascending: false })
-      .limit(200);
+      .range(desde, desde + registrosPorPagina - 1);
 
     if (!error && data) {
       const normalized = (data as any[]).map((m) => ({
@@ -185,19 +238,26 @@ const CajaTab = () => {
 
       setMovimientos(normalized);
 
-      const entradas = normalized
-        .filter((m) => m.tipo === "entrada")
-        .reduce((acc, m) => acc + Number(m.monto), 0);
+      // Calcular totales históricos (sin filtros)
+      const { data: allData } = await supabase
+        .from("movimientos_caja")
+        .select("tipo, monto");
 
-      const salidas = normalized
-        .filter((m) => m.tipo === "salida")
-        .reduce((acc, m) => acc + Number(m.monto), 0);
+      if (allData) {
+        const entradas = (allData as any[])
+          .filter((m) => m.tipo === "entrada")
+          .reduce((acc, m) => acc + Number(m.monto), 0);
 
-      setTotales({
-        entradas,
-        salidas,
-        saldo: entradas - salidas,
-      });
+        const salidas = (allData as any[])
+          .filter((m) => m.tipo === "salida")
+          .reduce((acc, m) => acc + Number(m.monto), 0);
+
+        setTotales({
+          entradas,
+          salidas,
+          saldo: entradas - salidas,
+        });
+      }
     }
   };
 
@@ -334,6 +394,7 @@ const CajaTab = () => {
     setMetodoPagoVenta("");
     setDialogVenta(false);
     
+    setPaginaActual(1);
     fetchMovimientos();
     fetchArticulos();
   };
@@ -364,40 +425,62 @@ const CajaTab = () => {
     setFormMovimiento({ monto: "", metodo_pago: "", concepto: "" });
     setDialogVenta(false);
     setDialogCompra(false);
-    setDialogRetiro(false);
+    setPaginaActual(1);
     fetchMovimientos();
   };
 
-  const movimientosFiltrados = movimientos.filter((m) => {
-    // Filtro por método de pago
-    if (metodoFiltro !== "todos" && m.metodo_pago !== metodoFiltro) {
-      return false;
+  const registrarRetiro = async () => {
+    if (!formRetiro.monto || parseFloat(formRetiro.monto) <= 0) {
+      toast.error("Ingresa un monto válido");
+      return;
     }
-    
-    // Filtro por tipo
-    if (tipoFiltro !== "todos" && m.tipo !== tipoFiltro) {
-      return false;
+
+    if (!formRetiro.motivo) {
+      toast.error("Selecciona un motivo de retiro");
+      return;
     }
-    
-    // Filtro por fecha
-    if (fechaFiltro !== "todos") {
-      const fechaMov = new Date(m.fecha);
-      const hoy = new Date();
-      
-      if (fechaFiltro === "hoy") {
-        const inicioHoy = new Date(hoy.setHours(0, 0, 0, 0));
-        if (fechaMov < inicioHoy) return false;
-      } else if (fechaFiltro === "semana") {
-        const inicioSemana = new Date(hoy.setDate(hoy.getDate() - 7));
-        if (fechaMov < inicioSemana) return false;
-      } else if (fechaFiltro === "mes") {
-        const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-        if (fechaMov < inicioMes) return false;
-      }
+
+    if (!formRetiro.metodo_pago) {
+      toast.error("Selecciona un método de pago");
+      return;
     }
-    
-    return true;
-  });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Construir la descripción completa
+    const motivoLabels: Record<string, string> = {
+      pago_proveedor: "Pago a proveedor",
+      personal: "Retiro personal",
+      gastos_operativos: "Gastos operativos",
+      caja_chica: "Caja chica",
+      otros: "Otros",
+    };
+
+    const descripcionCompleta = formRetiro.concepto 
+      ? `${motivoLabels[formRetiro.motivo]} - ${formRetiro.concepto}`
+      : motivoLabels[formRetiro.motivo];
+
+    const { error } = await supabase.from("movimientos_caja" as any).insert({
+      tipo: "salida",
+      monto: parseFloat(formRetiro.monto),
+      medio_pago: formRetiro.metodo_pago,
+      descripcion: descripcionCompleta,
+      user_id: user.id,
+    } as any);
+
+    if (error) {
+      toast.error("Error al registrar el retiro");
+      return;
+    }
+
+    toast.success("Retiro registrado exitosamente");
+    setFormRetiro({ monto: "", motivo: "", metodo_pago: "", concepto: "" });
+    setDialogRetiro(false);
+    setPaginaActual(1);
+    fetchMovimientos();
+  };
+
 
   return (
     <div className="space-y-6">
@@ -647,7 +730,7 @@ const CajaTab = () => {
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
               <Wallet className="h-6 w-6 text-slate-600" />
-              Registrar Retiro
+              Registrar Retiro de Caja
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -658,22 +741,62 @@ const CajaTab = () => {
                 type="number"
                 step="0.01"
                 placeholder="0.00"
-                value={formMovimiento.monto}
-                onChange={(e) => setFormMovimiento({ ...formMovimiento, monto: e.target.value })}
+                value={formRetiro.monto}
+                onChange={(e) => setFormRetiro({ ...formRetiro, monto: e.target.value })}
                 className="text-2xl h-14 text-center"
               />
             </div>
+            
             <div>
-              <Label className="text-base">Concepto/Motivo *</Label>
+              <Label className="text-base">Motivo del Retiro *</Label>
+              <Select
+                value={formRetiro.motivo}
+                onValueChange={(value) => setFormRetiro({ ...formRetiro, motivo: value })}
+              >
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Seleccionar motivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pago_proveedor">💼 Pago a proveedor</SelectItem>
+                  <SelectItem value="personal">👤 Retiro personal</SelectItem>
+                  <SelectItem value="gastos_operativos">🏪 Gastos operativos</SelectItem>
+                  <SelectItem value="caja_chica">💰 Caja chica</SelectItem>
+                  <SelectItem value="otros">📋 Otros</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-base">Método de Pago *</Label>
+              <Select
+                value={formRetiro.metodo_pago}
+                onValueChange={(value) => setFormRetiro({ ...formRetiro, metodo_pago: value })}
+              >
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Seleccionar método" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="efectivo">💵 Efectivo</SelectItem>
+                  <SelectItem value="transferencia">🏦 Transferencia</SelectItem>
+                  <SelectItem value="tarjeta_debito">💳 Tarjeta Débito</SelectItem>
+                  <SelectItem value="tarjeta_credito">💳 Tarjeta Crédito</SelectItem>
+                  <SelectItem value="mercadopago">📱 MercadoPago</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-base">Detalles Adicionales (Opcional)</Label>
               <Textarea
-                placeholder="Ej: Retiro para gastos personales, caja chica..."
-                value={formMovimiento.concepto}
-                onChange={(e) => setFormMovimiento({ ...formMovimiento, concepto: e.target.value })}
+                placeholder="Ej: Número de factura, nombre del proveedor, descripción específica..."
+                value={formRetiro.concepto}
+                onChange={(e) => setFormRetiro({ ...formRetiro, concepto: e.target.value })}
                 className="min-h-20"
               />
             </div>
+            
             <Button
-              onClick={() => registrarMovimiento("salida", "Retiro")}
+              onClick={registrarRetiro}
               className="w-full h-12 text-lg bg-slate-500/90 hover:bg-slate-500"
             >
               Confirmar Retiro
@@ -841,7 +964,7 @@ const CajaTab = () => {
               <Filter className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Movimientos Recientes</CardTitle>
             </div>
-            <Badge variant="outline">{movimientosFiltrados.length} movimientos</Badge>
+            <Badge variant="outline">{totalRegistros} movimientos</Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -924,7 +1047,7 @@ const CajaTab = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {movimientosFiltrados.length === 0 ? (
+                  {movimientos.length === 0 ? (
                     <TableRow>
                       <TableCell
                         colSpan={5}
@@ -934,7 +1057,7 @@ const CajaTab = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    movimientosFiltrados.slice(0, 100).map((mov) => (
+                    movimientos.map((mov) => (
                       <TableRow key={mov.id_movimiento} className="hover:bg-muted/30">
                         <TableCell className="font-medium text-sm">
                           {format(new Date(mov.fecha), "dd/MM/yyyy HH:mm", {
@@ -972,10 +1095,62 @@ const CajaTab = () => {
             </div>
           </div>
 
-          {movimientosFiltrados.length > 100 && (
-            <p className="text-sm text-muted-foreground text-center">
-              Mostrando los primeros 100 movimientos. Usa los filtros para refinar la búsqueda.
-            </p>
+          {/* Paginación */}
+          {totalRegistros > registrosPorPagina && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {Math.min((paginaActual - 1) * registrosPorPagina + 1, totalRegistros)} - {Math.min(paginaActual * registrosPorPagina, totalRegistros)} de {totalRegistros} movimientos
+              </p>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => setPaginaActual(Math.max(1, paginaActual - 1))}
+                      className={paginaActual === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  
+                  {Array.from({ length: Math.ceil(totalRegistros / registrosPorPagina) }, (_, i) => i + 1)
+                    .filter(pagina => {
+                      const totalPaginas = Math.ceil(totalRegistros / registrosPorPagina);
+                      return (
+                        pagina === 1 ||
+                        pagina === totalPaginas ||
+                        (pagina >= paginaActual - 1 && pagina <= paginaActual + 1)
+                      );
+                    })
+                    .map((pagina, index, array) => {
+                      const elementos = [];
+                      if (index > 0 && pagina - array[index - 1] > 1) {
+                        elementos.push(
+                          <PaginationItem key={`ellipsis-${pagina}`}>
+                            <span className="px-2">...</span>
+                          </PaginationItem>
+                        );
+                      }
+                      elementos.push(
+                        <PaginationItem key={pagina}>
+                          <PaginationLink
+                            onClick={() => setPaginaActual(pagina)}
+                            isActive={paginaActual === pagina}
+                            className="cursor-pointer"
+                          >
+                            {pagina}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                      return elementos;
+                    })}
+                  
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => setPaginaActual(Math.min(Math.ceil(totalRegistros / registrosPorPagina), paginaActual + 1))}
+                      className={paginaActual >= Math.ceil(totalRegistros / registrosPorPagina) ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           )}
         </CardContent>
       </Card>

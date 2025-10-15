@@ -19,6 +19,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Plus, Search, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +51,9 @@ const ClientesTab = () => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [open, setOpen] = useState(false);
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalRegistros, setTotalRegistros] = useState(0);
+  const registrosPorPagina = 20;
   const [selectedCliente, setSelectedCliente] = useState<{
     id: string;
     nombre: string;
@@ -58,14 +69,31 @@ const ClientesTab = () => {
 
   useEffect(() => {
     fetchClientes();
-  }, []);
+  }, [paginaActual]);
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [searchTerm]);
 
   const fetchClientes = async () => {
+    // Obtener el total de registros
+    const { count } = await supabase
+      .from("clientes")
+      .select("*", { count: "exact", head: true })
+      .eq("activo", true);
+
+    if (count) {
+      setTotalRegistros(count);
+    }
+
+    // Obtener la página actual
+    const desde = (paginaActual - 1) * registrosPorPagina;
     const { data, error } = await supabase
       .from("clientes")
       .select("*")
       .eq("activo", true)
-      .order("nombre");
+      .order("nombre")
+      .range(desde, desde + registrosPorPagina - 1);
 
     if (error) {
       toast.error("Error al cargar clientes");
@@ -145,6 +173,7 @@ const ClientesTab = () => {
         email: "",
         direccion: "",
       });
+      setPaginaActual(1);
       fetchClientes();
     }
   };
@@ -352,6 +381,64 @@ const ClientesTab = () => {
         onOpenChange={(open) => !open && setSelectedCliente(null)}
         onUpdate={fetchClientes}
       />
+
+      {/* Paginación */}
+      {totalRegistros > registrosPorPagina && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Mostrando {Math.min((paginaActual - 1) * registrosPorPagina + 1, totalRegistros)} - {Math.min(paginaActual * registrosPorPagina, totalRegistros)} de {totalRegistros} clientes
+          </p>
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  onClick={() => setPaginaActual(Math.max(1, paginaActual - 1))}
+                  className={paginaActual === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              
+              {Array.from({ length: Math.ceil(totalRegistros / registrosPorPagina) }, (_, i) => i + 1)
+                .filter(pagina => {
+                  const totalPaginas = Math.ceil(totalRegistros / registrosPorPagina);
+                  return (
+                    pagina === 1 ||
+                    pagina === totalPaginas ||
+                    (pagina >= paginaActual - 1 && pagina <= paginaActual + 1)
+                  );
+                })
+                .map((pagina, index, array) => {
+                  const elementos = [];
+                  if (index > 0 && pagina - array[index - 1] > 1) {
+                    elementos.push(
+                      <PaginationItem key={`ellipsis-${pagina}`}>
+                        <span className="px-2">...</span>
+                      </PaginationItem>
+                    );
+                  }
+                  elementos.push(
+                    <PaginationItem key={pagina}>
+                      <PaginationLink
+                        onClick={() => setPaginaActual(pagina)}
+                        isActive={paginaActual === pagina}
+                        className="cursor-pointer"
+                      >
+                        {pagina}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                  return elementos;
+                })}
+              
+              <PaginationItem>
+                <PaginationNext 
+                  onClick={() => setPaginaActual(Math.min(Math.ceil(totalRegistros / registrosPorPagina), paginaActual + 1))}
+                  className={paginaActual >= Math.ceil(totalRegistros / registrosPorPagina) ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
     </div>
   );
 };
