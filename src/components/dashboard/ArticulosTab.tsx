@@ -11,6 +11,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -27,7 +34,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Upload, Clock, Edit } from "lucide-react";
+import { Plus, Search, Upload, Clock, Edit, Filter, X } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { formatCurrency } from "@/lib/currency";
@@ -51,6 +58,8 @@ interface Articulo {
 const ArticulosTab = () => {
   const [articulos, setArticulos] = useState<Articulo[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
+  const [categorias, setCategorias] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
   const [articuloEditando, setArticuloEditando] = useState<Articulo | null>(null);
@@ -85,11 +94,12 @@ const ArticulosTab = () => {
 
   useEffect(() => {
     fetchArticulos();
-  }, [paginaActual]);
+    fetchCategorias();
+  }, [paginaActual, categoriaFiltro]);
 
   useEffect(() => {
     setPaginaActual(1);
-  }, [searchTerm]);
+  }, [searchTerm, categoriaFiltro]);
 
   const sugerirProximoCodigo = async () => {
     const { data } = await supabase
@@ -106,11 +116,25 @@ const ArticulosTab = () => {
   };
 
   const fetchArticulos = async () => {
-    // Obtener el total de registros
-    const { count } = await supabase
+    // Construir la consulta base
+    let queryCount = supabase
       .from("articulos")
       .select("*", { count: "exact", head: true })
       .eq("activo", true);
+
+    let queryData = supabase
+      .from("articulos" as any)
+      .select("*")
+      .eq("activo", true);
+
+    // Aplicar filtro de categoría si está seleccionado
+    if (categoriaFiltro !== "todas") {
+      queryCount = queryCount.eq("categoria", categoriaFiltro);
+      queryData = queryData.eq("categoria", categoriaFiltro);
+    }
+
+    // Obtener el total de registros
+    const { count } = await queryCount;
 
     if (count) {
       setTotalRegistros(count);
@@ -118,10 +142,7 @@ const ArticulosTab = () => {
 
     // Obtener la página actual
     const desde = (paginaActual - 1) * registrosPorPagina;
-    const { data, error } = await supabase
-      .from("articulos" as any)
-      .select("*")
-      .eq("activo", true)
+    const { data, error } = await queryData
       .order("nombre")
       .range(desde, desde + registrosPorPagina - 1);
 
@@ -132,17 +153,40 @@ const ArticulosTab = () => {
     }
   };
 
+  const fetchCategorias = async () => {
+    // Obtener todas las categorías únicas
+    const { data } = await supabase
+      .from("articulos")
+      .select("categoria")
+      .eq("activo", true)
+      .not("categoria", "is", null);
+
+    if (data) {
+      const categoriasUnicas = [...new Set(data.map((item: any) => item.categoria))].filter(Boolean);
+      setCategorias(categoriasUnicas as string[]);
+    }
+  };
+
+  const normalizarCategoria = (texto: string): string => {
+    if (!texto) return "";
+    // Primera letra mayúscula, resto minúsculas
+    return texto.trim().charAt(0).toUpperCase() + texto.trim().slice(1).toLowerCase();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Normalizar la categoría antes de guardar
+    const categoriaNormalizada = formData.categoria ? normalizarCategoria(formData.categoria) : null;
+
     const { error } = await supabase.from("articulos" as any).insert({
       codigo: parseInt(formData.codigo),
       nombre: formData.nombre,
       descripcion: formData.descripcion || null,
-      categoria: formData.categoria || null,
+      categoria: categoriaNormalizada,
       talle: formData.talle || null,
       color: formData.color || null,
       temporada: formData.temporada || null,
@@ -289,12 +333,15 @@ const ArticulosTab = () => {
       }
     }
 
+    // Normalizar la categoría antes de guardar
+    const categoriaNormalizada = formEditData.categoria ? normalizarCategoria(formEditData.categoria) : null;
+
     const { error } = await supabase
       .from("articulos")
       .update({
         nombre: formEditData.nombre,
         descripcion: formEditData.descripcion || null,
-        categoria: formEditData.categoria || null,
+        categoria: categoriaNormalizada,
         talle: formEditData.talle || null,
         color: formEditData.color || null,
         temporada: formEditData.temporada || null,
@@ -325,8 +372,41 @@ const ArticulosTab = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="relative flex-1 max-w-sm">
+      {/* Header con filtros y acciones */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="text-lg font-semibold">Inventario de Prendas</h3>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-sm text-muted-foreground">
+              {totalRegistros} artículo(s)
+            </p>
+            {(categoriaFiltro !== "todas" || searchTerm) && (
+              <Badge variant="secondary" className="gap-1">
+                Filtros activos
+              </Badge>
+            )}
+          </div>
+        </div>
+        
+        {/* Botón Limpiar Filtros */}
+        {(categoriaFiltro !== "todas" || searchTerm) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCategoriaFiltro("todas");
+              setSearchTerm("");
+            }}
+            className="gap-2"
+          >
+            <X className="h-4 w-4" />
+            Limpiar Filtros
+          </Button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[250px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por código, nombre, talle o color..."
@@ -335,28 +415,49 @@ const ArticulosTab = () => {
             className="pl-10"
           />
         </div>
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleExcelUpload}
-          accept=".xlsx,.xls"
-          className="hidden"
-        />
-        <Button 
-          onClick={() => fileInputRef.current?.click()} 
-          variant="outline"
-          className="h-11 text-base"
-        >
-          <Upload className="mr-2 h-5 w-5" />
-          Importar Excel
-        </Button>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="h-11 text-base">
-              <Plus className="mr-2 h-5 w-5" />
-              Nuevo Artículo
-            </Button>
-          </DialogTrigger>
+        
+        <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
+          <SelectTrigger className={`w-56 ${categoriaFiltro !== "todas" ? "border-primary" : ""}`}>
+            <Filter className="mr-2 h-4 w-4" />
+            <SelectValue placeholder="Todas las categorías" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">
+              <div className="flex items-center justify-between w-full">
+                <span>📂 Todas las categorías</span>
+              </div>
+            </SelectItem>
+            {categorias.sort().map((cat) => (
+              <SelectItem key={cat} value={cat}>
+                📁 {cat}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        
+        <div className="flex gap-2 ml-auto">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleExcelUpload}
+            accept=".xlsx,.xls"
+            className="hidden"
+          />
+          <Button 
+            onClick={() => fileInputRef.current?.click()} 
+            variant="outline"
+            className="h-11 text-base"
+          >
+            <Upload className="mr-2 h-5 w-5" />
+            Importar Excel
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-11 text-base">
+                <Plus className="mr-2 h-5 w-5" />
+                Nuevo Artículo
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Nuevo Artículo</DialogTitle>
@@ -442,13 +543,46 @@ const ArticulosTab = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="categoria">Categoría</Label>
-                <Input
-                  id="categoria"
-                  value={formData.categoria}
-                  onChange={(e) =>
-                    setFormData({ ...formData, categoria: e.target.value })
-                  }
-                />
+                <Select
+                  value={formData.categoria || "nueva"}
+                  onValueChange={(value) => {
+                    if (value === "nueva") {
+                      setFormData({ ...formData, categoria: "" });
+                    } else {
+                      setFormData({ ...formData, categoria: value });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar o escribir nueva" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nueva">
+                      <span className="text-muted-foreground">✏️ Escribir nueva categoría...</span>
+                    </SelectItem>
+                    {categorias.sort().map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        📁 {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(!formData.categoria || formData.categoria === "") && (
+                  <Input
+                    placeholder="Ej: Remeras, Pantalones..."
+                    value={formData.categoria}
+                    onChange={(e) => {
+                      const valor = normalizarCategoria(e.target.value);
+                      setFormData({ ...formData, categoria: valor });
+                    }}
+                    className="mt-2"
+                  />
+                )}
+                {formData.categoria && formData.categoria !== "" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Se guardará como: <strong>{normalizarCategoria(formData.categoria)}</strong>
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -496,6 +630,7 @@ const ArticulosTab = () => {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Diálogo de Edición */}
@@ -564,13 +699,46 @@ const ArticulosTab = () => {
 
             <div className="space-y-2">
               <Label htmlFor="edit-categoria">Categoría</Label>
-              <Input
-                id="edit-categoria"
-                value={formEditData.categoria}
-                onChange={(e) =>
-                  setFormEditData({ ...formEditData, categoria: e.target.value })
-                }
-              />
+              <Select
+                value={formEditData.categoria || "nueva"}
+                onValueChange={(value) => {
+                  if (value === "nueva") {
+                    setFormEditData({ ...formEditData, categoria: "" });
+                  } else {
+                    setFormEditData({ ...formEditData, categoria: value });
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar o escribir nueva" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nueva">
+                    <span className="text-muted-foreground">✏️ Escribir nueva categoría...</span>
+                  </SelectItem>
+                  {categorias.sort().map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      📁 {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(!formEditData.categoria || formEditData.categoria === "") && (
+                <Input
+                  placeholder="Ej: Remeras, Pantalones..."
+                  value={formEditData.categoria}
+                  onChange={(e) => {
+                    const valor = normalizarCategoria(e.target.value);
+                    setFormEditData({ ...formEditData, categoria: valor });
+                  }}
+                  className="mt-2"
+                />
+              )}
+              {formEditData.categoria && formEditData.categoria !== "" && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Se guardará como: <strong>{normalizarCategoria(formEditData.categoria)}</strong>
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

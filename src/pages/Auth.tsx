@@ -97,8 +97,8 @@ const Auth = () => {
           <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center mb-2">
             <Store className="w-8 h-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold">Boutique Manager</CardTitle>
-          <CardDescription>Gestiona tu tienda de ropa con estilo</CardDescription>
+          <CardTitle className="text-2xl font-bold">Las Marías</CardTitle>
+          <CardDescription>Administración y Control de Inventario</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
@@ -170,6 +170,18 @@ const Auth = () => {
               </form>
             </TabsContent>
           </Tabs>
+          
+          {/* Créditos */}
+          <div className="mt-6 pt-4 border-t text-center">
+            <p className="text-xs text-muted-foreground mb-2">
+              Desarrollado por
+            </p>
+            <img 
+              src="/1.png" 
+              alt="Appy Studios" 
+              className="h-8 mx-auto object-contain"
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

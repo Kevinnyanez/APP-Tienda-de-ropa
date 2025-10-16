@@ -15,10 +15,10 @@ const Index = () => {
 
           <div className="space-y-4">
             <h1 className="text-5xl font-bold tracking-tight">
-              Administracion Las Marinas
+              Las Marías
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl">
-              Sistema completo de gestión para tu tienda de ropa. Controla inventario, ventas, clientes y flujo de caja en un solo lugar.
+              Sistema completo de administración. Controla inventario, ventas, clientes y flujo de caja en un solo lugar.
             </p>
           </div>
 
@@ -52,6 +52,20 @@ const Index = () => {
               <p className="text-sm text-muted-foreground">
                 Visualiza tus ventas y toma decisiones basadas en datos reales
               </p>
+            </div>
+          </div>
+
+          {/* Footer con Logo Appy Studios */}
+          <div className="mt-16 pt-8 border-t border-border/40">
+            <div className="flex flex-col items-center gap-3">
+              <p className="text-sm text-muted-foreground">
+                Desarrollado por
+              </p>
+              <img 
+                src="/1.png" 
+                alt="Appy Studios" 
+                className="h-12 object-contain opacity-70 hover:opacity-100 transition-opacity"
+              />
             </div>
           </div>
         </div>

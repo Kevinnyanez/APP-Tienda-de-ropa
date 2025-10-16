@@ -12,6 +12,7 @@ import PuntoVentaTab from "@/components/dashboard/PuntoVentaTab";
 import CajaTab from "@/components/dashboard/CajaTab";
 import ReportesTab from "@/components/dashboard/ReportesTab";
 import StatsCards from "@/components/dashboard/StatsCards";
+import GlobalSearch from "@/components/GlobalSearch";
 import {
   Sidebar,
   SidebarContent,
@@ -79,13 +80,55 @@ const Dashboard = () => {
   }
 
   const menuItems = [
-    { id: "dashboard" as const, label: "Panel Principal", icon: LayoutDashboard },
-    { id: "pos" as const, label: "Punto de Venta", icon: ShoppingCart },
-    { id: "caja" as const, label: "Gestión de Caja", icon: Wallet },
-    { id: "ventas" as const, label: "Historial de Ventas", icon: TrendingUp },
-    { id: "reportes" as const, label: "Reportes", icon: BarChart3 },
-    { id: "articulos" as const, label: "Inventario", icon: Package },
-    { id: "clientes" as const, label: "Clientes", icon: Users },
+    { 
+      id: "dashboard" as const, 
+      label: "Inicio", 
+      description: "Resumen general",
+      icon: LayoutDashboard,
+      color: "text-sky-600 dark:text-sky-400"
+    },
+    { 
+      id: "pos" as const, 
+      label: "Vender", 
+      description: "Punto de venta",
+      icon: ShoppingCart,
+      color: "text-emerald-600 dark:text-emerald-400"
+    },
+    { 
+      id: "clientes" as const, 
+      label: "Clientes", 
+      description: "Cuenta corriente",
+      icon: Users,
+      color: "text-violet-600 dark:text-violet-400"
+    },
+    { 
+      id: "reportes" as const, 
+      label: "Arqueo de Caja", 
+      description: "Ver ganancias",
+      icon: BarChart3,
+      color: "text-amber-600 dark:text-amber-400"
+    },
+    { 
+      id: "caja" as const, 
+      label: "Movimientos", 
+      description: "Ingresos y gastos",
+      icon: Wallet,
+      color: "text-blue-600 dark:text-blue-400"
+    },
+    { 
+      id: "articulos" as const, 
+      label: "Inventario", 
+      description: "Gestionar prendas",
+      icon: Package,
+      color: "text-orange-600 dark:text-orange-400"
+    },
+    { 
+      id: "ventas" as const, 
+      label: "Historial", 
+      description: "Ventas anteriores",
+      icon: TrendingUp,
+      color: "text-rose-600 dark:text-rose-400"
+    },
   ];
 
   const renderContent = () => {
@@ -112,21 +155,21 @@ const Dashboard = () => {
   const getSectionTitle = () => {
     switch (activeSection) {
       case "dashboard":
-        return "Panel Principal";
+        return "Inicio - Resumen General";
       case "pos":
-        return "Punto de Venta";
+        return "Punto de Venta - Realizar Ventas";
       case "caja":
-        return "Gestión de Caja y Movimientos";
+        return "Movimientos de Caja - Ingresos y Gastos";
       case "ventas":
         return "Historial de Ventas";
       case "reportes":
-        return "Reportes y Estadísticas";
+        return "Arqueo de Caja - Ganancias y Estadísticas";
       case "articulos":
-        return "Gestión de Inventario";
+        return "Inventario - Gestión de Prendas";
       case "clientes":
-        return "Gestión de Clientes";
+        return "Clientes - Cuenta Corriente";
       default:
-        return "Panel Principal";
+        return "Inicio";
     }
   };
 
@@ -141,8 +184,8 @@ const Dashboard = () => {
                 <Store className="w-6 h-6 text-primary" />
               </div>
               <div className="flex flex-col">
-                <h2 className="text-lg font-bold">Las Marinas</h2>
-                <p className="text-xs text-muted-foreground">Sistema POS</p>
+                <h2 className="text-lg font-bold">Las Marías</h2>
+                <p className="text-xs text-muted-foreground">Administración</p>
               </div>
             </div>
           </SidebarHeader>
@@ -153,16 +196,25 @@ const Dashboard = () => {
                 <SidebarMenu>
                   {menuItems.map((item) => {
                     const Icon = item.icon;
+                    const isActive = activeSection === item.id;
                     return (
                       <SidebarMenuItem key={item.id}>
                         <SidebarMenuButton
                           onClick={() => setActiveSection(item.id)}
-                          isActive={activeSection === item.id}
+                          isActive={isActive}
                           size="lg"
                           tooltip={item.label}
+                          className={`h-16 ${isActive ? 'bg-accent/80' : ''}`}
                         >
-                          <Icon className="w-5 h-5" />
-                          <span>{item.label}</span>
+                          <div className="flex items-center gap-3 w-full">
+                            <div className={`p-2 rounded-lg ${isActive ? 'bg-background shadow-sm' : 'bg-accent/50'}`}>
+                              <Icon className={`w-5 h-5 shrink-0 ${isActive ? item.color : 'text-muted-foreground'}`} />
+                            </div>
+                            <div className="flex flex-col items-start">
+                              <span className="font-semibold text-sm">{item.label}</span>
+                              <span className="text-xs text-muted-foreground">{item.description}</span>
+                            </div>
+                          </div>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );
@@ -184,6 +236,20 @@ const Dashboard = () => {
                     <LogOut className="mr-2 h-4 w-4" />
                     Cerrar Sesión
                   </Button>
+                  
+                  {/* Créditos */}
+                  <div className="mt-4 pt-3 border-t">
+                    <div className="flex items-center justify-center gap-2">
+                      <p className="text-[11px] text-muted-foreground">
+                        Desarrollado por
+                      </p>
+                      <img 
+                        src="/1.png" 
+                        alt="Appy Studios" 
+                        className="h-7 object-contain"
+                      />
+                    </div>
+                  </div>
                 </div>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -193,11 +259,23 @@ const Dashboard = () => {
         {/* Main Content */}
         <SidebarInset>
           {/* Header */}
-          <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-card/50 backdrop-blur-sm px-4">
+          <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-4 border-b bg-card/50 backdrop-blur-sm px-4">
             <SidebarTrigger className="-ml-1" />
             <SidebarSeparator orientation="vertical" className="mr-2 h-4" />
             <div className="flex-1">
               <h1 className="text-xl font-bold">{getSectionTitle()}</h1>
+            </div>
+            <div className="hidden md:block">
+              <GlobalSearch
+                onSelectCliente={(id, nombre) => {
+                  setActiveSection("clientes");
+                  toast.success(`Cliente: ${nombre}`);
+                }}
+                onSelectArticulo={(id) => {
+                  setActiveSection("articulos");
+                  toast.success("Artículo encontrado");
+                }}
+              />
             </div>
           </header>
 
